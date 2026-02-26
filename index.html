@@ -159,7 +159,7 @@
                     clearTimeout(window.silenceTimer);
                     window.silenceTimer = setTimeout(() => { 
                         if (hasStartedTalking) finalizeIntercom(); 
-                    }, 1200); // Faster auto-switch (1.2 seconds)
+                    }, 3000); // Faster auto-switch (1.2 seconds)
                 };
                 recognition.start();
             }
@@ -282,4 +282,5 @@
     renderAdmin();
 </script>
 </body>
+
 </html>
