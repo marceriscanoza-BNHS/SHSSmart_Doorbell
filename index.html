@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Smart Intercom v36 - TV Sync Fix</title>
+    <title>Smart Intercom v37</title>
     <style>
         :root {
             --bg-main: #FFFFFF; --text-main: #000000; --accent: #ccff00;
@@ -49,24 +49,23 @@
         #volumeBar { width: 0%; height: 100%; background: #00cc00; transition: width 0.1s; }
         #proceedBtn { display: none; background: var(--proceed); color: white; border: 5px solid #000; padding: 25px 70px; font-size: 2.2rem; font-weight: bold; border-radius: 25px; cursor: pointer; margin-top: 20px; }
         .manual-reset { background: var(--danger); color: white; border: 4px solid #000; padding: 12px 30px; font-size: 1.2rem; font-weight: bold; border-radius: 10px; cursor: pointer; margin-top: 15px; }
-        .auto-timer { position: absolute; bottom: 15px; right: 20px; font-size: 1.2rem; font-weight: bold; color: #999; }
     </style>
 </head>
 <body>
 
     <div id="adminPanel">
         <div style="display:flex; gap:10px; align-items:center;">
-            <input type="text" id="nameInput" placeholder="Add Teacher..." style="padding:10px;">
-            <button onclick="addTeacher()" style="background:green; color:#fff; padding:10px; border:none; border-radius:5px;">ADD</button>
-            <button onclick="openTV()" style="background:blue; color:#fff; padding:10px; border:none; border-radius:5px;">1. OPEN TV</button>
-            <button onclick="startOperator()" style="background:black; color:#fff; padding:10px; border:none; border-radius:5px;">2. START SYSTEM</button>
+            <input type="text" id="nameInput" placeholder="Add Teacher...">
+            <button onclick="addTeacher()" style="background:green; color:#fff; padding:10px;">ADD</button>
+            <button onclick="openTV()" style="background:blue; color:#fff; padding:10px;">1. OPEN TV</button>
+            <button onclick="startOperator()" style="background:black; color:#fff; padding:10px;">2. START</button>
         </div>
         <div id="button-grid"></div>
     </div>
 
     <div id="state-1" class="state-container">
         <button class="bell-btn" onclick="triggerDoorbell()">🔔</button>
-        <h1 style="font-size: 4rem; font-weight: 900; color: #000; margin-top: 20px;">TAP TO START</h1>
+        <h1 style="font-size: 3rem; font-weight: 900;">TAP TO START</h1>
     </div>
 
     <div id="state-2" class="state-container">
@@ -74,18 +73,16 @@
         <div class="meter-container"><div id="volumeBar"></div></div>
         <button id="proceedBtn" onclick="finalizeIntercom()">DONE TALKING →</button>
         <button class="manual-reset" onclick="cancelIntercom()">RESET</button>
-        <div class="auto-timer" id="timer-2"></div>
     </div>
 
     <div id="state-3" class="state-container">
-        <h2 style="font-size: 2.5rem; margin-bottom: 20px; font-weight: 900;">WHO ARE YOU LOOKING FOR?</h2>
+        <h2 style="font-size: 2rem; font-weight: 900;">WHO ARE YOU LOOKING FOR?</h2>
         <div id="op-list-container" class="op-list"></div>
-        <div style="display:flex; gap:20px; margin:20px;">
+        <div style="display:flex; gap:20px; margin:10px;">
             <button id="pg1Btn" class="page-nav-btn active-page" onclick="changePage(1)">PAGE 1</button>
             <button id="pg2Btn" class="page-nav-btn" onclick="changePage(2)">PAGE 2</button>
         </div>
         <button class="manual-reset" onclick="cancelIntercom()">CANCEL</button>
-        <div class="auto-timer" id="timer-3"></div>
     </div>
 
     <audio id="sndDoorbell" src="https://assets.mixkit.co/active_storage/sfx/951/951-preview.mp3"></audio>
@@ -95,159 +92,116 @@
     let tvWindow = null;
     let teachers = JSON.parse(localStorage.getItem('teachers')) || [];
     let recognition, localStream, audioContext, analyser, dataArray, animationId;
-    let idleTimer, countdownInterval, backupBtnTimer, currentPage = 1;
-
-    function startCountdown(seconds, displayId) {
-        clearInterval(countdownInterval);
-        let timeLeft = seconds;
-        const display = document.getElementById(displayId);
-        display.innerText = "Auto-reset in: " + timeLeft + "s";
-        countdownInterval = setInterval(() => {
-            timeLeft--;
-            display.innerText = "Auto-reset in: " + timeLeft + "s";
-            if (timeLeft <= 0) clearInterval(countdownInterval);
-        }, 1000);
-    }
-
-    function resetIdleTimer(seconds, timerId) {
-        clearTimeout(idleTimer);
-        startCountdown(seconds, timerId);
-        idleTimer = setTimeout(() => cancelIntercom(), seconds * 1000);
-    }
+    let currentPage = 1;
 
     function setUI(state) {
-        if (state > 0 && !document.fullscreenElement) {
-            document.documentElement.requestFullscreen().catch(() => {});
-        }
         document.querySelectorAll('.state-container').forEach(c => c.classList.remove('active'));
         if(state > 0) document.getElementById(`state-${state}`).classList.add('active');
         
-        // Only sync state to TV if it's NOT State 3 (to keep video or name visible)
-        if(tvWindow && state !== 3) tvWindow.postMessage({type: 'SYNC_STATE', state: state}, '*');
-        
-        clearTimeout(idleTimer);
-        clearInterval(countdownInterval);
-        if(state === 3) resetIdleTimer(90, 'timer-3');
-        else if (state === 2) resetIdleTimer(60, 'timer-2');
-        if (state === 1 || state === 3) stopLogic();
-    }
-
-    function startOperator() {
-        if(!tvWindow || tvWindow.closed) return alert("Open TV Window first!");
-        document.getElementById('adminPanel').style.display = 'none';
-        setUI(1);
-    }
-
-    function triggerDoorbell() {
-        if(tvWindow) tvWindow.postMessage({type: 'RESET_TV'}, '*');
-        document.getElementById('sndDoorbell').play().catch(() => {});
-        setTimeout(() => { setUI(2); startVoiceAndCam(); }, 1200);
-    }
-
-    async function startVoiceAndCam() {
-        const btn = document.getElementById('proceedBtn');
-        btn.style.display = 'none';
-        clearTimeout(backupBtnTimer);
-        backupBtnTimer = setTimeout(() => { btn.style.display = 'block'; }, 4000);
-        try {
-            const constraints = { video: true, audio: { echoCancellation: true, noiseSuppression: true } };
-            localStream = await navigator.mediaDevices.getUserMedia(constraints);
-            if(tvWindow) tvWindow.postMessage({type: 'START_VIDEO'}, '*');
-            audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const source = audioContext.createMediaStreamSource(localStream);
-            analyser = audioContext.createAnalyser();
-            source.connect(analyser);
-            dataArray = new Uint8Array(analyser.frequencyBinCount);
-            drawVolume();
-            if ('webkitSpeechRecognition' in window) {
-                recognition = new webkitSpeechRecognition();
-                recognition.continuous = true; 
-                recognition.onresult = () => { btn.style.display = 'block'; resetIdleTimer(60, 'timer-2'); };
-                recognition.start();
-            }
-        } catch (err) { console.error(err); }
-    }
-
-    function drawVolume() {
-        animationId = requestAnimationFrame(drawVolume);
-        if(!analyser) return;
-        analyser.getByteFrequencyData(dataArray);
-        let values = 0; for (let i = 0; i < dataArray.length; i++) values += dataArray[i];
-        document.getElementById('volumeBar').style.width = Math.min((values / dataArray.length) * 2.5, 100) + "%";
-    }
-
-    function stopLogic() {
-        cancelAnimationFrame(animationId);
-        if(recognition) { try { recognition.stop(); recognition = null; } catch(e) {} }
-        if(audioContext) { try { audioContext.close(); audioContext = null; } catch(e) {} }
-        if(localStream) { localStream.getTracks().forEach(track => track.stop()); localStream = null; }
-        if(tvWindow) tvWindow.postMessage({type: 'STOP_VIDEO'}, '*');
-    }
-
-    function cancelIntercom() { setUI(1); }
-    function finalizeIntercom() { renderOpList(); setUI(3); }
-    function changePage(pg) { currentPage = pg; renderOpList(); }
-
-    function renderOpList() {
-        const container = document.getElementById('op-list-container');
-        container.innerHTML = '';
-        const start = (currentPage - 1) * 20;
-        const pageTeachers = teachers.slice(start, start + 20);
-        document.getElementById('pg1Btn').classList.toggle('active-page', currentPage === 1);
-        document.getElementById('pg2Btn').classList.toggle('active-page', currentPage === 2);
-        pageTeachers.forEach(name => {
-            const b = document.createElement('div');
-            b.className = 'op-btn'; b.innerText = name;
-            b.onclick = () => {
-                document.getElementById('sndChime').play();
-                if(tvWindow) tvWindow.postMessage({type: 'SHOW_NAME', name: name}, '*');
-                cancelIntercom();
-            };
-            container.appendChild(b);
-        });
+        // Sync Basic State (1=Welcome, 2=Video)
+        if(tvWindow) {
+            if(state === 1) tvWindow.postMessage({type: 'RESET'}, '*');
+            if(state === 2) tvWindow.postMessage({type: 'START_VIDEO'}, '*');
+        }
+        if(state === 1 || state === 3) stopLogic();
     }
 
     function openTV() {
         tvWindow = window.open("", "TVDisplay", "width=1200,height=800");
         tvWindow.document.write(`
-            <html><body style="background:#000; color:#fff; margin:0; overflow:hidden; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; font-family:sans-serif; cursor:pointer;" onclick="this.requestFullscreen()">
-                <div id="main" style="text-align:center; width:100%; height:100%; display:flex; align-items:center; justify-content:center; box-sizing:border-box; padding:20px;">
-                    <h1 id="msg" style="font-size:8vw; margin:0;">WELCOME</h1>
+            <html><body style="background:#000; color:#fff; margin:0; overflow:hidden; display:flex; align-items:center; justify-content:center; height:100vh; font-family:sans-serif;">
+                <div id="content" style="text-align:center; width:100%;">
+                    <h1 id="msg" style="font-size:8vw;">WELCOME</h1>
                 </div>
                 <video id="v" style="display:none; width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; transform: scaleX(-1);" autoplay playsinline></video>
                 <script>
-                    let t; window.onmessage = (e) => {
-                        const m = document.getElementById('msg'); const v = document.getElementById('v'); const main = document.getElementById('main');
+                    let t;
+                    window.onmessage = (e) => {
+                        const msg = document.getElementById('msg');
+                        const v = document.getElementById('v');
+                        const content = document.getElementById('content');
                         clearTimeout(t);
-                        if(e.data.type === 'SYNC_STATE' && e.data.state === 1) { 
-                            v.style.display = 'none'; v.srcObject = null;
-                            main.style.display = 'flex'; main.innerHTML = '<h1 style="font-size:8vw; margin:0;">WELCOME</h1>'; 
+
+                        if(e.data.type === 'RESET') {
+                            v.style.display = 'none'; content.style.display = 'block';
+                            content.innerHTML = '<h1 style="font-size:8vw;">WELCOME</h1>';
                         }
-                        if(e.data.type === 'START_VIDEO') { main.style.display = 'none'; v.style.display = 'block'; navigator.mediaDevices.getUserMedia({video:true}).then(s => { v.srcObject = s; }); }
-                        if(e.data.type === 'STOP_VIDEO') { if(v.srcObject) { v.srcObject.getTracks().forEach(tr => tr.stop()); } v.srcObject = null; v.style.display = 'none'; }
+                        if(e.data.type === 'START_VIDEO') {
+                            content.style.display = 'none'; v.style.display = 'block';
+                            navigator.mediaDevices.getUserMedia({video:true}).then(s => { v.srcObject = s; });
+                        }
                         if(e.data.type === 'SHOW_NAME') {
-                            v.style.display = 'none'; main.style.display = 'flex';
-                            main.innerHTML = '<div style="border:1.5vw solid #ccff00; border-radius:5vw; padding:5vw; max-width:90vw; display:flex; align-items:center; justify-content:center;"><h1 style="font-size:9vw; color:#ccff00; margin:0; font-weight:900; text-align:center; line-height:1.1;">' + e.data.name + '</h1></div>';
-                            t = setTimeout(() => { main.innerHTML = '<h1 style="font-size:8vw; margin:0;">WELCOME</h1>'; }, 30000);
+                            v.style.display = 'none'; content.style.display = 'block';
+                            content.innerHTML = '<div style="border:1.5vw solid #ccff00; border-radius:4vw; padding:4vw; display:inline-block; max-width:85vw;"><h1 style="font-size:8vw; color:#ccff00; margin:0; word-wrap:break-word;">' + e.data.name + '</h1></div>';
+                            t = setTimeout(() => { content.innerHTML = '<h1 style="font-size:8vw;">WELCOME</h1>'; }, 30000);
                         }
-                    }
+                    };
                 <\/script>
             </body></html>
         `);
     }
 
-    function addTeacher() { const n = document.getElementById('nameInput').value; if(n) { teachers.push(n); teachers.sort(); localStorage.setItem('teachers', JSON.stringify(teachers)); renderAdmin(); document.getElementById('nameInput').value=''; } }
-    function deleteTeacher(name) { teachers = teachers.filter(t => t !== name); localStorage.setItem('teachers', JSON.stringify(teachers)); renderAdmin(); }
-    function renderAdmin() {
-        const grid = document.getElementById('button-grid'); grid.innerHTML = '';
-        teachers.forEach(t => { grid.innerHTML += '<div style="background:#fff; padding:5px; border:1px solid #000; display:flex; justify-content:space-between; margin:2px; font-size:0.8rem;"><span>'+t+'</span> <button onclick="deleteTeacher(\''+t+'\')" style="background:red; color:white; border:none;">X</button></div>'; });
+    function triggerDoorbell() {
+        document.getElementById('sndDoorbell').play();
+        setTimeout(() => { setUI(2); startVoice(); }, 1000);
     }
 
-    document.addEventListener('touchstart', () => {
-        if (document.getElementById('state-2').classList.contains('active')) resetIdleTimer(60, 'timer-2');
-        if (document.getElementById('state-3').classList.contains('active')) resetIdleTimer(90, 'timer-3');
-    });
+    async function startVoice() {
+        const btn = document.getElementById('proceedBtn');
+        btn.style.display = 'none';
+        setTimeout(() => { btn.style.display = 'block'; }, 3000);
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({video:true, audio:true});
+            audioContext = new AudioContext();
+            const source = audioContext.createMediaStreamSource(localStream);
+            analyser = audioContext.createAnalyser();
+            source.connect(analyser);
+            dataArray = new Uint8Array(analyser.frequencyBinCount);
+            drawVolume();
+        } catch(e) { console.log(e); }
+    }
 
+    function drawVolume() {
+        animationId = requestAnimationFrame(drawVolume);
+        analyser.getByteFrequencyData(dataArray);
+        let sum = dataArray.reduce((a,b) => a+b, 0);
+        document.getElementById('volumeBar').style.width = Math.min((sum/dataArray.length)*3, 100) + "%";
+    }
+
+    function stopLogic() {
+        cancelAnimationFrame(animationId);
+        if(localStream) localStream.getTracks().forEach(t => t.stop());
+    }
+
+    function finalizeIntercom() { renderOpList(); setUI(3); }
+    function cancelIntercom() { setUI(1); }
+    function changePage(p) { currentPage = p; renderOpList(); }
+
+    function renderOpList() {
+        const container = document.getElementById('op-list-container');
+        container.innerHTML = '';
+        const start = (currentPage - 1) * 20;
+        const list = teachers.slice(start, start + 20);
+        document.getElementById('pg1Btn').classList.toggle('active-page', currentPage === 1);
+        document.getElementById('pg2Btn').classList.toggle('active-page', currentPage === 2);
+        list.forEach(name => {
+            const b = document.createElement('div');
+            b.className = 'op-btn'; b.innerText = name;
+            b.onclick = () => {
+                document.getElementById('sndChime').play();
+                if(tvWindow) tvWindow.postMessage({type: 'SHOW_NAME', name: name}, '*');
+                setUI(1);
+            };
+            container.appendChild(b);
+        });
+    }
+
+    function startOperator() { document.getElementById('adminPanel').style.display='none'; setUI(1); }
+    function addTeacher() { const n = document.getElementById('nameInput').value; if(n){teachers.push(n); teachers.sort(); localStorage.setItem('teachers', JSON.stringify(teachers)); renderAdmin(); document.getElementById('nameInput').value='';}}
+    function renderAdmin() { 
+        const g = document.getElementById('button-grid'); g.innerHTML = '';
+        teachers.forEach(t => { g.innerHTML += '<div style="font-size:0.7rem; border:1px solid #ccc; padding:2px; margin:2px;">'+t+'</div>'; });
+    }
     renderAdmin();
 </script>
 </body>
