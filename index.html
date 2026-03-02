@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Smart Intercom v34 - TV Display Fix</title>
+    <title>Smart Intercom v35 - TV Fix</title>
     <style>
         :root {
             --bg-main: #FFFFFF; --text-main: #000000; --accent: #ccff00;
@@ -210,8 +210,8 @@
         tvWindow = window.open("", "TVDisplay", "width=1200,height=800");
         tvWindow.document.write(`
             <html><body style="background:#000; color:#fff; margin:0; overflow:hidden; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; font-family:sans-serif; cursor:pointer;" onclick="this.requestFullscreen()">
-                <div id="main" style="text-align:center; width:100%; display:flex; align-items:center; justify-content:center;">
-                    <h1 id="msg" style="font-size:8vw; margin:0;">WELCOME</h1>
+                <div id="main" style="text-align:center; width:100%; height:100%; display:flex; align-items:center; justify-content:center; box-sizing:border-box; padding:20px;">
+                    <h1 id="msg" style="font-size:8vw; margin:0; line-height:1.2;">WELCOME</h1>
                 </div>
                 <video id="v" style="display:none; width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; transform: scaleX(-1);" autoplay playsinline></video>
                 <script>
@@ -232,7 +232,7 @@
                         if(e.data.type === 'STOP_VIDEO') { if(v.srcObject) { v.srcObject.getTracks().forEach(tr => tr.stop()); } v.srcObject = null; v.style.display = 'none'; }
                         if(e.data.type === 'SHOW_NAME') {
                             v.style.display = 'none'; main.style.display = 'flex';
-                            main.innerHTML = '<div style="border:15px solid #ccff00; border-radius:50px; padding:60px; display:inline-block;"><h1 style="font-size:10vw; color:#ccff00; margin:0; font-weight:900;">' + e.data.name + '</h1></div>';
+                            main.innerHTML = '<div style="border:1.5vw solid #ccff00; border-radius:5vw; padding:5vw; max-width:90vw; max-height:80vh; overflow:hidden; display:flex; align-items:center; justify-content:center; box-sizing:border-box;"><h1 style="font-size:9vw; color:#ccff00; margin:0; font-weight:900; word-wrap:break-word; text-align:center; line-height:1.1;">' + e.data.name + '</h1></div>';
                             t = setTimeout(() => { main.innerHTML = '<h1 style="font-size:8vw; margin:0;">WELCOME</h1>'; }, 30000);
                         }
                     }
