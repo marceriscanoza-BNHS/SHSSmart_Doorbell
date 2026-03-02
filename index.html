@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Smart Intercom v33 - Final</title>
+    <title>Smart Intercom v34 - TV Display Fix</title>
     <style>
         :root {
             --bg-main: #FFFFFF; --text-main: #000000; --accent: #ccff00;
@@ -50,7 +50,6 @@
         #proceedBtn { display: none; background: var(--proceed); color: white; border: 5px solid #000; padding: 25px 70px; font-size: 2.2rem; font-weight: bold; border-radius: 25px; cursor: pointer; margin-top: 20px; }
         .manual-reset { background: var(--danger); color: white; border: 4px solid #000; padding: 12px 30px; font-size: 1.2rem; font-weight: bold; border-radius: 10px; cursor: pointer; margin-top: 15px; }
 
-        /* Timer UI */
         .auto-timer { position: absolute; bottom: 15px; right: 20px; font-size: 1.2rem; font-weight: bold; color: #999; }
     </style>
 </head>
@@ -105,7 +104,6 @@
         timeLeft = seconds;
         const display = document.getElementById(displayId);
         display.innerText = "Auto-reset in: " + timeLeft + "s";
-        
         countdownInterval = setInterval(() => {
             timeLeft--;
             display.innerText = "Auto-reset in: " + timeLeft + "s";
@@ -123,21 +121,13 @@
         if (state > 0 && !document.fullscreenElement) {
             document.documentElement.requestFullscreen().catch(() => {});
         }
-
         document.querySelectorAll('.state-container').forEach(c => c.classList.remove('active'));
         if(state > 0) document.getElementById(`state-${state}`).classList.add('active');
-        
         if(tvWindow) tvWindow.postMessage({type: 'SYNC_STATE', state: state}, '*');
-        
         clearTimeout(idleTimer);
         clearInterval(countdownInterval);
-
-        if(state === 3) {
-            resetIdleTimer(90, 'timer-3');
-        } else if (state === 2) {
-            resetIdleTimer(60, 'timer-2');
-        }
-
+        if(state === 3) resetIdleTimer(90, 'timer-3');
+        else if (state === 2) resetIdleTimer(60, 'timer-2');
         if (state === 1 || state === 3) stopLogic();
     }
 
@@ -158,7 +148,6 @@
         btn.style.display = 'none';
         clearTimeout(backupBtnTimer);
         backupBtnTimer = setTimeout(() => { btn.style.display = 'block'; }, 4000);
-
         try {
             const constraints = { video: true, audio: { echoCancellation: true, noiseSuppression: true } };
             localStream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -169,15 +158,10 @@
             source.connect(analyser);
             dataArray = new Uint8Array(analyser.frequencyBinCount);
             drawVolume();
-
             if ('webkitSpeechRecognition' in window) {
                 recognition = new webkitSpeechRecognition();
                 recognition.continuous = true; 
-                recognition.onresult = () => { 
-                    btn.style.display = 'block';
-                    // Human speech detected - reset the 60s timer
-                    resetIdleTimer(60, 'timer-2');
-                };
+                recognition.onresult = () => { btn.style.display = 'block'; resetIdleTimer(60, 'timer-2'); };
                 recognition.start();
             }
         } catch (err) { console.error(err); }
@@ -226,19 +210,30 @@
         tvWindow = window.open("", "TVDisplay", "width=1200,height=800");
         tvWindow.document.write(`
             <html><body style="background:#000; color:#fff; margin:0; overflow:hidden; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; font-family:sans-serif; cursor:pointer;" onclick="this.requestFullscreen()">
-                <div id="main" style="text-align:center; width:100%;"><h1 id="msg" style="font-size:8vw;">WELCOME</h1></div>
+                <div id="main" style="text-align:center; width:100%; display:flex; align-items:center; justify-content:center;">
+                    <h1 id="msg" style="font-size:8vw; margin:0;">WELCOME</h1>
+                </div>
                 <video id="v" style="display:none; width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; transform: scaleX(-1);" autoplay playsinline></video>
                 <script>
                     let t; window.onmessage = (e) => {
                         const m = document.getElementById('msg'); const v = document.getElementById('v'); const main = document.getElementById('main');
                         clearTimeout(t);
-                        if(e.data.type === 'SYNC_STATE' && e.data.state === 1) { main.style.display = 'block'; v.style.display = 'none'; v.srcObject = null; m.innerHTML = 'WELCOME'; }
-                        if(e.data.type === 'START_VIDEO') { main.style.display = 'none'; v.style.display = 'block'; navigator.mediaDevices.getUserMedia({video:true, audio:true}).then(s => { v.srcObject = s; }); }
+                        if(e.data.type === 'SYNC_STATE' && e.data.state === 1) { 
+                            v.style.display = 'none'; v.srcObject = null;
+                            main.style.display = 'flex'; main.innerHTML = '<h1 style="font-size:8vw; margin:0;">WELCOME</h1>'; 
+                        }
+                        if(e.data.type === 'RESET_TV') {
+                            v.style.display = 'none'; main.style.display = 'flex'; main.innerHTML = '<h1 style="font-size:8vw; margin:0;">WELCOME</h1>';
+                        }
+                        if(e.data.type === 'START_VIDEO') { 
+                            main.style.display = 'none'; v.style.display = 'block'; 
+                            navigator.mediaDevices.getUserMedia({video:true, audio:true}).then(s => { v.srcObject = s; }); 
+                        }
                         if(e.data.type === 'STOP_VIDEO') { if(v.srcObject) { v.srcObject.getTracks().forEach(tr => tr.stop()); } v.srcObject = null; v.style.display = 'none'; }
                         if(e.data.type === 'SHOW_NAME') {
-                            v.style.display = 'none'; main.style.display = 'block';
-                            main.innerHTML = '<div style="border:15px solid #ccff00; border-radius:50px; padding:60px;"><h1 style="font-size:10vw; color:#ccff00; margin:0; font-weight:900;">' + e.data.name + '</h1></div>';
-                            t = setTimeout(() => { main.innerHTML = '<h1 style="font-size:8vw;">WELCOME</h1>'; }, 30000);
+                            v.style.display = 'none'; main.style.display = 'flex';
+                            main.innerHTML = '<div style="border:15px solid #ccff00; border-radius:50px; padding:60px; display:inline-block;"><h1 style="font-size:10vw; color:#ccff00; margin:0; font-weight:900;">' + e.data.name + '</h1></div>';
+                            t = setTimeout(() => { main.innerHTML = '<h1 style="font-size:8vw; margin:0;">WELCOME</h1>'; }, 30000);
                         }
                     }
                 <\/script>
@@ -253,12 +248,9 @@
         teachers.forEach(t => { grid.innerHTML += '<div style="background:#fff; padding:5px; border:1px solid #000; display:flex; justify-content:space-between; margin:2px; font-size:0.8rem;"><span>'+t+'</span> <button onclick="deleteTeacher(\''+t+'\')" style="background:red; color:white; border:none;">X</button></div>'; });
     }
 
-    // Touch reset logic
     document.addEventListener('touchstart', () => {
-        const isS2 = document.getElementById('state-2').classList.contains('active');
-        const isS3 = document.getElementById('state-3').classList.contains('active');
-        if (isS2) resetIdleTimer(60, 'timer-2');
-        if (isS3) resetIdleTimer(90, 'timer-3');
+        if (document.getElementById('state-2').classList.contains('active')) resetIdleTimer(60, 'timer-2');
+        if (document.getElementById('state-3').classList.contains('active')) resetIdleTimer(90, 'timer-3');
     });
 
     renderAdmin();
