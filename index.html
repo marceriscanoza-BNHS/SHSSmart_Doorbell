@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Smart Intercom v30 - Fullscreen Fix</title>
+    <title>Smart Intercom v31 - Privacy Lock</title>
     <style>
         :root {
             --bg-main: #FFFFFF; --text-main: #000000; --accent: #ccff00;
@@ -11,11 +11,9 @@
         }
         body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #000; touch-action: manipulation; overflow: hidden; }
         
-        /* ADMIN PANEL - Can be hidden */
         #adminPanel { padding: 10px; background: #fff; border-bottom: 2px solid #ddd; position: relative; z-index: 5000; }
         #button-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 5px; padding: 10px; max-height: 150px; overflow-y: auto; }
         
-        /* FULLSCREEN STATES */
         .state-container { 
             display: none; height: 100vh; width: 100vw; 
             flex-direction: column; align-items: center; justify-content: center; 
@@ -44,10 +42,7 @@
             font-size: 1.4rem; font-weight: bold; border-radius: 10px; cursor: pointer; text-align: center;
         }
         
-        .page-nav-btn {
-            background: #ddd; color: #000; border: 4px solid #000; padding: 15px 40px;
-            font-size: 1.8rem; font-weight: 900; border-radius: 15px; cursor: pointer;
-        }
+        .page-nav-btn { background: #ddd; color: #000; border: 4px solid #000; padding: 15px 40px; font-size: 1.8rem; font-weight: 900; border-radius: 15px; cursor: pointer; }
         .active-page { background: var(--accent) !important; }
 
         .meter-container { width: 80%; height: 35px; background: #eee; border-radius: 20px; margin-top: 15px; overflow: hidden; border: 5px solid #000; }
@@ -100,35 +95,38 @@
     let state3IdleTimer, backupBtnTimer, currentPage = 1;
 
     function setUI(state) {
-        // Force the whole app into fullscreen mode on the first interaction
+        // Fullscreen logic
         if (state > 0 && !document.fullscreenElement) {
-            document.documentElement.requestFullscreen().catch(e => console.log("FS Blocked"));
+            document.documentElement.requestFullscreen().catch(() => {});
         }
 
         document.querySelectorAll('.state-container').forEach(c => c.classList.remove('active'));
-        if(state > 0) {
-            document.getElementById(`state-${state}`).classList.add('active');
-        }
+        if(state > 0) document.getElementById(`state-${state}`).classList.add('active');
         
         if(tvWindow) tvWindow.postMessage({type: 'SYNC_STATE', state: state}, '*');
         
         clearTimeout(state3IdleTimer);
         if(state === 3) state3IdleTimer = setTimeout(() => cancelIntercom(), 90000);
+
+        // PRIVACY LOCK: If entering State 1 or State 3, kill the hardware immediately
+        if (state === 1 || state === 3) {
+            stopLogic();
+        }
     }
 
     function startOperator() {
         if(!tvWindow || tvWindow.closed) return alert("Open TV Window first!");
-        document.getElementById('adminPanel').style.display = 'none'; // HIDE ADMIN BAR
+        document.getElementById('adminPanel').style.display = 'none';
         setUI(1);
     }
 
     function triggerDoorbell() {
-        // Re-request fullscreen just in case
-        if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
-        
         if(tvWindow) tvWindow.postMessage({type: 'RESET_TV'}, '*');
         document.getElementById('sndDoorbell').play().catch(() => {});
-        setTimeout(() => { setUI(2); startVoiceAndCam(); }, 1200);
+        setTimeout(() => { 
+            setUI(2); 
+            startVoiceAndCam(); 
+        }, 1200);
     }
 
     async function startVoiceAndCam() {
@@ -136,41 +134,61 @@
         btn.style.display = 'none';
         clearTimeout(backupBtnTimer);
         backupBtnTimer = setTimeout(() => { btn.style.display = 'block'; }, 4000);
+
         try {
             const constraints = { video: true, audio: { echoCancellation: false, autoGainControl: true } };
             localStream = await navigator.mediaDevices.getUserMedia(constraints);
+            
             if(tvWindow) tvWindow.postMessage({type: 'START_VIDEO'}, '*');
+
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
             const source = audioContext.createMediaStreamSource(localStream);
             analyser = audioContext.createAnalyser();
             source.connect(analyser);
             dataArray = new Uint8Array(analyser.frequencyBinCount);
             drawVolume();
+
             if ('webkitSpeechRecognition' in window) {
                 recognition = new webkitSpeechRecognition();
-                recognition.continuous = true; recognition.onresult = () => { btn.style.display = 'block'; };
+                recognition.continuous = true; 
+                recognition.onresult = () => { btn.style.display = 'block'; };
                 recognition.start();
             }
-        } catch (err) { console.error(err); }
+        } catch (err) { console.error("Mic/Cam error:", err); }
     }
 
     function drawVolume() {
         animationId = requestAnimationFrame(drawVolume);
+        if(!analyser) return;
         analyser.getByteFrequencyData(dataArray);
         let values = 0; for (let i = 0; i < dataArray.length; i++) values += dataArray[i];
         document.getElementById('volumeBar').style.width = Math.min((values / dataArray.length) * 2.5, 100) + "%";
     }
 
     function stopLogic() {
+        // 1. Kill animation loop
         cancelAnimationFrame(animationId);
-        if(recognition) { try { recognition.stop(); } catch(e) {} }
-        if(audioContext) { try { audioContext.close(); } catch(e) {} }
-        if(localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+        
+        // 2. Kill Recognition
+        if(recognition) { try { recognition.stop(); recognition = null; } catch(e) {} }
+        
+        // 3. Kill Audio Context (Mic Analysis)
+        if(audioContext) { try { audioContext.close(); audioContext = null; } catch(e) {} }
+        
+        // 4. KILL HARDWARE TRACKS (The most important part)
+        if(localStream) { 
+            localStream.getTracks().forEach(track => {
+                track.stop(); // Stops the camera/mic light
+            }); 
+            localStream = null; 
+        }
+
+        // 5. Notify TV to kill its stream
         if(tvWindow) tvWindow.postMessage({type: 'STOP_VIDEO'}, '*');
     }
 
-    function cancelIntercom() { stopLogic(); setUI(1); }
-    function finalizeIntercom() { stopLogic(); renderOpList(); setUI(3); }
+    function cancelIntercom() { setUI(1); }
+    function finalizeIntercom() { renderOpList(); setUI(3); }
     function changePage(pg) { currentPage = pg; renderOpList(); }
 
     function renderOpList() {
@@ -202,9 +220,9 @@
                     let t; window.onmessage = (e) => {
                         const m = document.getElementById('msg'); const v = document.getElementById('v'); const main = document.getElementById('main');
                         clearTimeout(t);
-                        if(e.data.type === 'SYNC_STATE' && e.data.state === 1) { main.style.display = 'block'; v.style.display = 'none'; m.innerHTML = 'WELCOME'; }
+                        if(e.data.type === 'SYNC_STATE' && e.data.state === 1) { main.style.display = 'block'; v.style.display = 'none'; v.srcObject = null; m.innerHTML = 'WELCOME'; }
                         if(e.data.type === 'START_VIDEO') { main.style.display = 'none'; v.style.display = 'block'; navigator.mediaDevices.getUserMedia({video:true, audio:true}).then(s => { v.srcObject = s; }); }
-                        if(e.data.type === 'STOP_VIDEO') { v.style.display = 'none'; }
+                        if(e.data.type === 'STOP_VIDEO') { if(v.srcObject) { v.srcObject.getTracks().forEach(tr => tr.stop()); } v.srcObject = null; v.style.display = 'none'; }
                         if(e.data.type === 'SHOW_NAME') {
                             v.style.display = 'none'; main.style.display = 'block';
                             main.innerHTML = '<div style="border:15px solid #ccff00; border-radius:50px; padding:60px;"><h1 style="font-size:10vw; color:#ccff00; margin:0; font-weight:900;">' + e.data.name + '</h1></div>';
