@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Smart Intercom v18 - Giant Text</title>
+    <title>Smart Intercom v21 - Auto-Extend TV</title>
     <style>
         :root {
             --bg-main: #FFFFFF; 
@@ -15,7 +15,6 @@
         }
 
         body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #f8f9fa; touch-action: manipulation; overflow: hidden; }
-        
         .admin-header { padding: 15px; background: #fff; border-bottom: 2px solid #ddd; }
         #button-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; padding: 20px; }
         
@@ -30,27 +29,20 @@
         .bell-btn { font-size: 200px; cursor: pointer; background: none; border: none; animation: pulse 1s infinite; }
         @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
 
-        /* UPDATED: GIANT SCRIPT TEXT */
         .script-box { 
             background: #fff; padding: 50px; border-radius: 30px; 
-            border: 10px solid #000; 
-            width: 90%; 
-            font-size: 48px; /* Increased from 32px */
-            font-weight: 700;
+            border: 10px solid #000; width: 90%; font-size: 48px; font-weight: 700;
             text-align: center; color: #000; line-height: 1.3;
-            box-shadow: 15px 15px 0px #ccff00;
-            box-sizing: border-box;
+            box-shadow: 15px 15px 0px #ccff00; box-sizing: border-box;
         }
         .script-box b { color: #0055ff; text-decoration: underline; }
 
-        /* LARGER VOLUME METER */
         .meter-container { width: 80%; height: 50px; background: #eee; border-radius: 25px; margin-top: 40px; overflow: hidden; border: 5px solid #000; }
         #volumeBar { width: 0%; height: 100%; background: #00cc00; transition: width 0.1s; }
 
         #proceedBtn {
             display: none; background: var(--proceed); color: white; border: 5px solid #000; padding: 30px 80px;
-            font-size: 2.5rem; font-weight: bold; border-radius: 25px; cursor: pointer;
-            margin-top: 30px;
+            font-size: 2.5rem; font-weight: bold; border-radius: 25px; cursor: pointer; margin-top: 30px;
         }
 
         .op-list { width: 100%; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; padding: 40px; box-sizing: border-box; flex-grow: 1; overflow-y: auto; }
@@ -64,8 +56,6 @@
             font-size: 1.6rem; font-weight: bold; border-radius: 15px; cursor: pointer; 
             margin-top: auto; margin-bottom: 20px;
         }
-
-        .delete-btn { background: #ff4444; color: #fff; border: none; padding: 5px 10px; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -73,7 +63,7 @@
     <div class="admin-header" id="adminPanel">
         <input type="text" id="nameInput" placeholder="Teacher Name..." style="padding:10px;">
         <button onclick="addTeacher()" style="background:green; color:#fff; padding:10px;">ADD</button>
-        <button onclick="openTV()" style="background:blue; color:#fff; padding:10px;">1. OPEN TV</button>
+        <button onclick="openTV()" style="background:blue; color:#fff; padding:10px;">1. OPEN TV ON EXTENDED</button>
         <button onclick="startOperator()" style="background:black; color:#fff; padding:10px;">2. START SYSTEM</button>
         <div id="button-grid"></div>
     </div>
@@ -111,22 +101,38 @@
     let localStream;
     let audioContext, analyser, dataArray, animationId;
     let hasStartedTalking = false;
-    let bypassTimeout, state3IdleTimer;
+    let state3IdleTimer;
+    let isLocked = false;
+
+    // --- FULL SCREEN LOCK ---
+    function toggleFullScreen() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(() => {});
+        }
+    }
+
+    document.addEventListener('fullscreenchange', () => {
+        if (!document.fullscreenElement && isLocked) {
+            cancelIntercom();
+        }
+    });
 
     function setUI(state) {
         document.querySelectorAll('.state-container').forEach(c => c.classList.remove('active'));
-        if(state > 0) document.getElementById(`state-${state}`).classList.add('active');
-        if(tvWindow) tvWindow.postMessage({type: 'SYNC_STATE', state: state}, '*');
-        
-        clearTimeout(state3IdleTimer);
-        if(state === 3) {
-            state3IdleTimer = setTimeout(() => { cancelIntercom(); }, 60000); 
+        if(state > 0) {
+            document.getElementById(`state-${state}`).classList.add('active');
+            isLocked = true;
+            toggleFullScreen();
+        } else {
+            isLocked = false;
         }
+        if(tvWindow) tvWindow.postMessage({type: 'SYNC_STATE', state: state}, '*');
+        clearTimeout(state3IdleTimer);
+        if(state === 3) state3IdleTimer = setTimeout(() => cancelIntercom(), 60000);
     }
 
     function startOperator() {
         if(!tvWindow || tvWindow.closed) return alert("Please open TV Window first!");
-        document.documentElement.requestFullscreen().catch(() => {});
         setUI(1);
     }
 
@@ -139,32 +145,18 @@
     async function startVoiceAndCam() {
         hasStartedTalking = false;
         document.getElementById('proceedBtn').style.display = 'none';
-        
-        clearTimeout(bypassTimeout);
-        bypassTimeout = setTimeout(() => {
-            document.getElementById('proceedBtn').style.display = 'block';
-        }, 15000);
-
         try {
-            const constraints = {
-                video: true,
-                audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true }
-            };
-
+            const constraints = { video: true, audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true } };
             localStream = await navigator.mediaDevices.getUserMedia(constraints);
             if(tvWindow) tvWindow.postMessage({type: 'START_VIDEO'}, '*');
-
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
             const source = audioContext.createMediaStreamSource(localStream);
             const enhancer = audioContext.createGain();
-            enhancer.gain.value = 2.5; // Audio Boost
-
+            enhancer.gain.value = 2.5;
             analyser = audioContext.createAnalyser();
             analyser.fftSize = 256;
-
             source.connect(enhancer);
             enhancer.connect(analyser);
-
             dataArray = new Uint8Array(analyser.frequencyBinCount);
             drawVolume();
 
@@ -174,8 +166,9 @@
                 recognition.interimResults = true;
                 recognition.onresult = () => {
                     hasStartedTalking = true;
+                    document.getElementById('proceedBtn').style.display = 'block';
                     clearTimeout(window.silenceTimer);
-                    window.silenceTimer = setTimeout(() => { finalizeIntercom(); }, 3000); 
+                    window.silenceTimer = setTimeout(() => cancelIntercom(), 10000); 
                 };
                 recognition.start();
             }
@@ -186,7 +179,7 @@
         animationId = requestAnimationFrame(drawVolume);
         analyser.getByteFrequencyData(dataArray);
         let values = 0;
-        for (let i = 0; i < dataArray.length; i++) { values += dataArray[i]; }
+        for (let i = 0; i < dataArray.length; i++) values += dataArray[i];
         let average = values / dataArray.length;
         document.getElementById('volumeBar').style.width = Math.min(average * 2.5, 100) + "%";
     }
@@ -196,7 +189,6 @@
         if(recognition) { try{recognition.stop();}catch(e){} recognition.onend = null; }
         if(audioContext) audioContext.close();
         clearTimeout(window.silenceTimer);
-        clearTimeout(bypassTimeout);
         clearTimeout(state3IdleTimer);
         stopAllStreams();
         setUI(1);
@@ -207,7 +199,6 @@
         if(recognition) { try{recognition.stop();}catch(e){} recognition.onend = null; }
         if(audioContext) audioContext.close();
         clearTimeout(window.silenceTimer);
-        clearTimeout(bypassTimeout);
         stopAllStreams();
         setUI(3);
         renderOpList();
@@ -234,8 +225,29 @@
         });
     }
 
-    function openTV() {
-        tvWindow = window.open("", "TVDisplay", "width=1200,height=800");
+    // --- UPDATED: AUTO-DETECTION FOR EXTENDED SCREEN ---
+    async function openTV() {
+        let left = 0;
+        let width = 1200;
+        let height = 800;
+
+        try {
+            if ('getScreenDetails' in window || 'getDisplayMedia' in navigator) {
+                const screenDetails = await window.getScreenDetails();
+                // Check if there's more than one screen
+                if (screenDetails.screens.length > 1) {
+                    const extendedScreen = screenDetails.screens[1]; // Target second screen
+                    left = extendedScreen.availLeft;
+                    width = extendedScreen.availWidth;
+                    height = extendedScreen.availHeight;
+                }
+            }
+        } catch (e) {
+            console.log("Using default window position. Allow window-management for auto-detect.");
+        }
+
+        const features = `width=${width},height=${height},left=${left},top=0,menubar=no,toolbar=no,location=no,status=no`;
+        tvWindow = window.open("", "TVDisplay", features);
         tvWindow.document.write(`
             <html><body style="background:#000; color:#fff; margin:0; overflow:hidden; display:flex; align-items:center; justify-content:center; height:100vh; font-family:sans-serif;">
                 <div id="main" style="text-align:center; width:100%;">
