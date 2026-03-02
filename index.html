@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Smart Intercom v21 - Auto-Extend TV</title>
+    <title>Smart Intercom v22 - Transition Fix</title>
     <style>
         :root {
             --bg-main: #FFFFFF; 
@@ -63,7 +63,7 @@
     <div class="admin-header" id="adminPanel">
         <input type="text" id="nameInput" placeholder="Teacher Name..." style="padding:10px;">
         <button onclick="addTeacher()" style="background:green; color:#fff; padding:10px;">ADD</button>
-        <button onclick="openTV()" style="background:blue; color:#fff; padding:10px;">1. OPEN TV ON EXTENDED</button>
+        <button onclick="openTV()" style="background:blue; color:#fff; padding:10px;">1. OPEN TV</button>
         <button onclick="startOperator()" style="background:black; color:#fff; padding:10px;">2. START SYSTEM</button>
         <div id="button-grid"></div>
     </div>
@@ -81,7 +81,7 @@
         </div>
         <div class="meter-container"><div id="volumeBar"></div></div>
         <button id="proceedBtn" onclick="finalizeIntercom()">DONE TALKING →</button>
-        <p id="micStatus" style="color:#000; margin-top:20px; font-weight:900; font-size: 2rem;">SPEAK LOUDLY</p>
+        <p id="micStatus" style="color:#000; margin-top:20px; font-weight:900; font-size: 2rem;">WAITING FOR VOICE...</p>
         <button class="manual-reset" onclick="cancelIntercom()">RESET SYSTEM</button>
     </div>
 
@@ -100,33 +100,20 @@
     let recognition;
     let localStream;
     let audioContext, analyser, dataArray, animationId;
-    let hasStartedTalking = false;
-    let state3IdleTimer;
+    let state3IdleTimer, backupBtnTimer;
     let isLocked = false;
-
-    // --- FULL SCREEN LOCK ---
-    function toggleFullScreen() {
-        if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen().catch(() => {});
-        }
-    }
-
-    document.addEventListener('fullscreenchange', () => {
-        if (!document.fullscreenElement && isLocked) {
-            cancelIntercom();
-        }
-    });
 
     function setUI(state) {
         document.querySelectorAll('.state-container').forEach(c => c.classList.remove('active'));
         if(state > 0) {
             document.getElementById(`state-${state}`).classList.add('active');
             isLocked = true;
-            toggleFullScreen();
+            if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
         } else {
             isLocked = false;
         }
         if(tvWindow) tvWindow.postMessage({type: 'SYNC_STATE', state: state}, '*');
+        
         clearTimeout(state3IdleTimer);
         if(state === 3) state3IdleTimer = setTimeout(() => cancelIntercom(), 60000);
     }
@@ -143,12 +130,25 @@
     }
 
     async function startVoiceAndCam() {
-        hasStartedTalking = false;
-        document.getElementById('proceedBtn').style.display = 'none';
+        const btn = document.getElementById('proceedBtn');
+        const status = document.getElementById('micStatus');
+        btn.style.display = 'none';
+        status.innerText = "WAITING FOR VOICE...";
+        status.style.color = "red";
+
+        // Fix: Force button to show after 3 seconds even if silent
+        clearTimeout(backupBtnTimer);
+        backupBtnTimer = setTimeout(() => { 
+            btn.style.display = 'block'; 
+            status.innerText = "TAP BUTTON WHEN FINISHED";
+            status.style.color = "black";
+        }, 3000);
+
         try {
             const constraints = { video: true, audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true } };
             localStream = await navigator.mediaDevices.getUserMedia(constraints);
             if(tvWindow) tvWindow.postMessage({type: 'START_VIDEO'}, '*');
+
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
             const source = audioContext.createMediaStreamSource(localStream);
             const enhancer = audioContext.createGain();
@@ -164,15 +164,21 @@
                 recognition = new webkitSpeechRecognition();
                 recognition.continuous = true;
                 recognition.interimResults = true;
+                
+                recognition.onstart = () => { console.log("Recognition Active"); };
+
                 recognition.onresult = () => {
-                    hasStartedTalking = true;
-                    document.getElementById('proceedBtn').style.display = 'block';
+                    btn.style.display = 'block'; // Show button instantly when speech detected
+                    status.innerText = "I HEAR YOU - KEEP TALKING";
+                    status.style.color = "green";
+                    
                     clearTimeout(window.silenceTimer);
-                    window.silenceTimer = setTimeout(() => cancelIntercom(), 10000); 
+                    // 10s RESET TO STATE 1 IF THEY STOP MID-WAY
+                    window.silenceTimer = setTimeout(() => { cancelIntercom(); }, 10000); 
                 };
                 recognition.start();
             }
-        } catch (err) { console.error(err); }
+        } catch (err) { console.error("Mic Error:", err); }
     }
 
     function drawVolume() {
@@ -184,22 +190,26 @@
         document.getElementById('volumeBar').style.width = Math.min(average * 2.5, 100) + "%";
     }
 
-    function cancelIntercom() {
+    function stopLogic() {
         cancelAnimationFrame(animationId);
-        if(recognition) { try{recognition.stop();}catch(e){} recognition.onend = null; }
-        if(audioContext) audioContext.close();
+        if(recognition) { 
+            recognition.onresult = null;
+            recognition.onend = null;
+            try { recognition.stop(); } catch(e) {} 
+        }
+        if(audioContext) { try { audioContext.close(); } catch(e) {} }
         clearTimeout(window.silenceTimer);
-        clearTimeout(state3IdleTimer);
+        clearTimeout(backupBtnTimer);
         stopAllStreams();
+    }
+
+    function cancelIntercom() {
+        stopLogic();
         setUI(1);
     }
 
     function finalizeIntercom() {
-        cancelAnimationFrame(animationId);
-        if(recognition) { try{recognition.stop();}catch(e){} recognition.onend = null; }
-        if(audioContext) audioContext.close();
-        clearTimeout(window.silenceTimer);
-        stopAllStreams();
+        stopLogic();
         setUI(3);
         renderOpList();
     }
@@ -225,34 +235,19 @@
         });
     }
 
-    // --- UPDATED: AUTO-DETECTION FOR EXTENDED SCREEN ---
     async function openTV() {
         let left = 0;
-        let width = 1200;
-        let height = 800;
-
         try {
-            if ('getScreenDetails' in window || 'getDisplayMedia' in navigator) {
-                const screenDetails = await window.getScreenDetails();
-                // Check if there's more than one screen
-                if (screenDetails.screens.length > 1) {
-                    const extendedScreen = screenDetails.screens[1]; // Target second screen
-                    left = extendedScreen.availLeft;
-                    width = extendedScreen.availWidth;
-                    height = extendedScreen.availHeight;
-                }
+            if ('getScreenDetails' in window) {
+                const details = await window.getScreenDetails();
+                if (details.screens.length > 1) left = details.screens[1].availLeft;
             }
-        } catch (e) {
-            console.log("Using default window position. Allow window-management for auto-detect.");
-        }
+        } catch (e) {}
 
-        const features = `width=${width},height=${height},left=${left},top=0,menubar=no,toolbar=no,location=no,status=no`;
-        tvWindow = window.open("", "TVDisplay", features);
+        tvWindow = window.open("", "TVDisplay", `left=${left},top=0,width=1200,height=800`);
         tvWindow.document.write(`
             <html><body style="background:#000; color:#fff; margin:0; overflow:hidden; display:flex; align-items:center; justify-content:center; height:100vh; font-family:sans-serif;">
-                <div id="main" style="text-align:center; width:100%;">
-                    <h1 id="msg" style="font-size:8vw;">WELCOME</h1>
-                </div>
+                <div id="main" style="text-align:center; width:100%;"><h1 id="msg" style="font-size:8vw;">WELCOME</h1></div>
                 <video id="v" style="display:none; width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; transform: scaleX(-1);" autoplay playsinline></video>
                 <script>
                     let tvStream;
@@ -261,17 +256,15 @@
                         const m = document.getElementById('msg');
                         const v = document.getElementById('v');
                         const main = document.getElementById('main');
-                        if(e.data.type === 'SYNC_STATE' && e.data.state === 1 && !resetTimer) { 
+                        if(e.data.type === 'SYNC_STATE' && e.data.state === 1) { 
                             main.style.display = 'block'; v.style.display = 'none'; 
                             main.innerHTML = '<h1 style="font-size:8vw;">WELCOME</h1>';
                         }
                         if(e.data.type === 'RESET_TV') {
-                            clearTimeout(resetTimer); resetTimer = null;
-                            main.style.display = 'block'; v.style.display = 'none'; 
+                            clearTimeout(resetTimer); main.style.display = 'block'; v.style.display = 'none'; 
                             main.innerHTML = '<h1 style="font-size:8vw;">WELCOME</h1>';
                         }
                         if(e.data.type === 'START_VIDEO') {
-                            clearTimeout(resetTimer); resetTimer = null;
                             main.style.display = 'none'; v.style.display = 'block';
                             navigator.mediaDevices.getUserMedia({video:true, audio:true}).then(s => { tvStream = s; v.srcObject = s; });
                         }
@@ -281,12 +274,9 @@
                         }
                         if(e.data.type === 'SHOW_NAME') {
                             v.style.display = 'none'; main.style.display = 'block';
-                            main.innerHTML = '<div style="border:15px solid #ccff00; border-radius:50px; padding:40px; display:inline-block;"><h1 style="font-size:12vw; color:#ccff00; margin:0;">' + e.data.name + '</h1></div>';
+                            main.innerHTML = '<div style="border:15px solid #ccff00; border-radius:50px; padding:40px;"><h1 style="font-size:12vw; color:#ccff00; margin:0;">' + e.data.name + '</h1></div>';
                             clearTimeout(resetTimer);
-                            resetTimer = setTimeout(() => {
-                                main.innerHTML = '<h1 style="font-size:8vw;">WELCOME</h1>';
-                                resetTimer = null;
-                            }, 30000);
+                            resetTimer = setTimeout(() => { main.innerHTML = '<h1 style="font-size:8vw;">WELCOME</h1>'; }, 30000);
                         }
                     }
                 <\/script>
