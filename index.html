@@ -3,20 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Smart Intercom v24 - Paged Grid</title>
+    <title>Smart Intercom v27 - Name Fix</title>
     <style>
         :root {
-            --bg-main: #FFFFFF; 
-            --text-main: #000000;
-            --accent: #ccff00;
-            --btn-op: #1a1a1a;
-            --danger: #ff0000;
-            --proceed: #0055ff;
+            --bg-main: #FFFFFF; --text-main: #000000; --accent: #ccff00;
+            --btn-op: #1a1a1a; --danger: #ff0000; --proceed: #0055ff;
         }
-
         body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #f8f9fa; touch-action: manipulation; overflow: hidden; }
-        .admin-header { padding: 15px; background: #fff; border-bottom: 2px solid #ddd; }
-        #button-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; padding: 20px; }
+        .admin-header { padding: 10px; background: #fff; border-bottom: 2px solid #ddd; }
+        #button-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 5px; padding: 10px; }
         
         .state-container { 
             display: none; height: 100vh; width: 100vw; 
@@ -26,101 +21,78 @@
         }
         .active { display: flex !important; }
 
-        .bell-btn { font-size: 180px; cursor: pointer; background: none; border: none; animation: pulse 1s infinite; }
+        .bell-btn { font-size: 150px; cursor: pointer; background: none; border: none; animation: pulse 1s infinite; }
         @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
 
         .script-box { 
-            background: #fff; padding: 40px; border-radius: 30px; 
-            border: 10px solid #000; width: 90%; font-size: 42px; font-weight: 700;
+            background: #fff; padding: 30px; border-radius: 25px; 
+            border: 8px solid #000; width: 90%; font-size: 36px; font-weight: 700;
             text-align: center; color: #000; line-height: 1.2;
-            box-shadow: 15px 15px 0px #ccff00; box-sizing: border-box;
+            box-shadow: 10px 10px 0px #ccff00; box-sizing: border-box;
         }
-        .script-box b { color: #0055ff; text-decoration: underline; }
 
-        /* --- PAGED GRID SYSTEM --- */
         .op-list { 
-            display: grid; 
-            grid-template-columns: repeat(4, 1fr); 
-            grid-template-rows: repeat(5, 1fr);
-            width: 95vw; height: 65vh; gap: 10px; padding: 10px; 
-            box-sizing: border-box;
+            display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(5, 1fr);
+            width: 95vw; height: 60vh; gap: 8px; padding: 5px; box-sizing: border-box;
         }
         .op-btn { 
             display: flex; align-items: center; justify-content: center;
-            background: var(--btn-op); color: var(--accent); border: 4px solid #000; 
-            font-size: 1.6rem; font-weight: bold; border-radius: 12px; cursor: pointer; text-align: center;
+            background: var(--btn-op); color: var(--accent); border: 3px solid #000; 
+            font-size: 1.4rem; font-weight: bold; border-radius: 10px; cursor: pointer; text-align: center;
         }
         
-        .pager-controls { display: flex; gap: 20px; margin: 15px 0; }
         .page-nav-btn {
             background: #ddd; color: #000; border: 4px solid #000; padding: 15px 40px;
             font-size: 1.8rem; font-weight: 900; border-radius: 15px; cursor: pointer;
         }
-        .page-nav-btn.active-page { background: var(--accent); }
+        .active-page { background: var(--accent) !important; }
 
-        .meter-container { width: 80%; height: 35px; background: #eee; border-radius: 20px; margin-top: 20px; overflow: hidden; border: 5px solid #000; }
+        .meter-container { width: 80%; height: 30px; background: #eee; border-radius: 15px; margin-top: 15px; overflow: hidden; border: 4px solid #000; }
         #volumeBar { width: 0%; height: 100%; background: #00cc00; transition: width 0.1s; }
-
-        #proceedBtn {
-            display: none; background: var(--proceed); color: white; border: 5px solid #000; padding: 25px 80px;
-            font-size: 2.2rem; font-weight: bold; border-radius: 25px; cursor: pointer; margin-top: 20px;
-        }
-
-        .manual-reset { 
-            background: var(--danger); color: white; border: 4px solid #000; padding: 12px 30px; 
-            font-size: 1.2rem; font-weight: bold; border-radius: 10px; cursor: pointer; margin-bottom: 10px;
-        }
+        #proceedBtn { display: none; background: var(--proceed); color: white; border: 5px solid #000; padding: 20px 60px; font-size: 2rem; font-weight: bold; border-radius: 20px; cursor: pointer; margin-top: 15px; }
+        .manual-reset { background: var(--danger); color: white; border: 3px solid #000; padding: 10px 25px; font-size: 1.1rem; border-radius: 8px; cursor: pointer; margin-top: 10px; }
     </style>
 </head>
 <body>
 
     <div class="admin-header" id="adminPanel">
-        <input type="text" id="nameInput" placeholder="Teacher Name...">
-        <button onclick="addTeacher()" style="background:green; color:#fff; padding:10px;">ADD</button>
-        <button onclick="openTV()" style="background:blue; color:#fff; padding:10px;">1. OPEN TV</button>
-        <button onclick="startOperator()" style="background:black; color:#fff; padding:10px;">2. START SYSTEM</button>
+        <input type="text" id="nameInput" placeholder="Add Name...">
+        <button onclick="addTeacher()" style="background:green; color:#fff; padding:8px;">ADD</button>
+        <button onclick="openTV()" style="background:blue; color:#fff; padding:8px;">1. OPEN TV</button>
+        <button onclick="startOperator()" style="background:black; color:#fff; padding:8px;">2. START SYSTEM</button>
         <div id="button-grid"></div>
     </div>
 
     <div id="state-1" class="state-container">
         <button class="bell-btn" onclick="triggerDoorbell()">🔔</button>
-        <h1 style="color:#000; font-size: 4rem; margin-top:10px; font-weight: 900;">TAP TO START</h1>
+        <h1 style="font-size: 3.5rem; font-weight: 900;">TAP TO START</h1>
     </div>
 
     <div id="state-2" class="state-container">
-        <div class="script-box">
-            "Good morning/afternoon po!<br>
-            I'm <b>(your name)</b>, from <b>(grade & section)</b>.<br><br>
-            <b>(State your purpose)</b>"
-        </div>
+        <div class="script-box">"I am <b>(Name)</b>, from <b>(Section)</b>.<br><b>(My Purpose)</b>"</div>
         <div class="meter-container"><div id="volumeBar"></div></div>
         <button id="proceedBtn" onclick="finalizeIntercom()">DONE TALKING →</button>
-        <p id="micStatus" style="color:#000; margin-top:10px; font-weight:900; font-size: 1.5rem;">READY...</p>
         <button class="manual-reset" onclick="cancelIntercom()">RESET</button>
     </div>
 
     <div id="state-3" class="state-container">
-        <h2 style="color:#000; font-size: 2.5rem; margin: 10px 0; font-weight: 900;">WHO ARE YOU LOOKING FOR?</h2>
-        
+        <h2 style="font-size: 2rem; margin: 10px;">LOOKING FOR:</h2>
         <div id="op-list-container" class="op-list"></div>
-
-        <div class="pager-controls">
+        <div style="display:flex; gap:20px; margin:10px;">
             <button id="pg1Btn" class="page-nav-btn active-page" onclick="changePage(1)">PAGE 1</button>
             <button id="pg2Btn" class="page-nav-btn" onclick="changePage(2)">PAGE 2</button>
         </div>
-
         <button class="manual-reset" onclick="cancelIntercom()">CANCEL</button>
     </div>
 
-    <audio id="sndDoorbell" src="https://assets.mixkit.co/active_storage/sfx/951/951-preview.mp3" preload="auto"></audio>
-    <audio id="sndChime" src="https://assets.mixkit.co/active_storage/sfx/2864/2864-preview.mp3" preload="auto"></audio>
+    <audio id="sndDoorbell" src="https://assets.mixkit.co/active_storage/sfx/951/951-preview.mp3"></audio>
+    <audio id="sndChime" src="https://assets.mixkit.co/active_storage/sfx/2864/2864-preview.mp3"></audio>
 
 <script>
     let tvWindow = null;
     let teachers = JSON.parse(localStorage.getItem('teachers')) || [];
     let recognition, localStream, audioContext, analyser, dataArray, animationId;
-    let state3IdleTimer, backupBtnTimer;
-    let currentPage = 1;
+    let state3IdleTimer, backupBtnTimer, currentPage = 1;
 
     function setUI(state) {
         document.querySelectorAll('.state-container').forEach(c => c.classList.remove('active'));
@@ -130,14 +102,10 @@
         }
         if(tvWindow) tvWindow.postMessage({type: 'SYNC_STATE', state: state}, '*');
         clearTimeout(state3IdleTimer);
-        // INCREASED IDLE TO 90 SECONDS
-        if(state === 3) state3IdleTimer = setTimeout(() => cancelIntercom(), 30000);
+        if(state === 3) state3IdleTimer = setTimeout(() => cancelIntercom(), 90000);
     }
 
-    function startOperator() {
-        if(!tvWindow || tvWindow.closed) return alert("Open TV Window first!");
-        setUI(1);
-    }
+    function startOperator() { if(!tvWindow || tvWindow.closed) return alert("Open TV Window first!"); setUI(1); }
 
     function triggerDoorbell() {
         if(tvWindow) tvWindow.postMessage({type: 'RESET_TV'}, '*');
@@ -150,33 +118,19 @@
         btn.style.display = 'none';
         clearTimeout(backupBtnTimer);
         backupBtnTimer = setTimeout(() => { btn.style.display = 'block'; }, 4000);
-
         try {
-            const constraints = { video: true, audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true } };
+            const constraints = { video: true, audio: { echoCancellation: false, autoGainControl: true } };
             localStream = await navigator.mediaDevices.getUserMedia(constraints);
             if(tvWindow) tvWindow.postMessage({type: 'START_VIDEO'}, '*');
-
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
             const source = audioContext.createMediaStreamSource(localStream);
-            const enhancer = audioContext.createGain();
-            enhancer.gain.value = 2.5;
             analyser = audioContext.createAnalyser();
-            analyser.fftSize = 256;
-            source.connect(enhancer);
-            enhancer.connect(analyser);
+            source.connect(analyser);
             dataArray = new Uint8Array(analyser.frequencyBinCount);
             drawVolume();
-
             if ('webkitSpeechRecognition' in window) {
                 recognition = new webkitSpeechRecognition();
-                recognition.continuous = true;
-                recognition.interimResults = true;
-                recognition.onresult = () => {
-                    btn.style.display = 'block';
-                    clearTimeout(window.silenceTimer);
-                    // Mid-speech safety reset (10s)
-                    window.silenceTimer = setTimeout(() => cancelIntercom(), 10000); 
-                };
+                recognition.continuous = true; recognition.onresult = () => { btn.style.display = 'block'; };
                 recognition.start();
             }
         } catch (err) { console.error(err); }
@@ -185,58 +139,32 @@
     function drawVolume() {
         animationId = requestAnimationFrame(drawVolume);
         analyser.getByteFrequencyData(dataArray);
-        let values = 0;
-        for (let i = 0; i < dataArray.length; i++) values += dataArray[i];
-        let average = values / dataArray.length;
-        document.getElementById('volumeBar').style.width = Math.min(average * 2.5, 100) + "%";
+        let values = 0; for (let i = 0; i < dataArray.length; i++) values += dataArray[i];
+        document.getElementById('volumeBar').style.width = Math.min((values / dataArray.length) * 2.5, 100) + "%";
     }
 
     function stopLogic() {
         cancelAnimationFrame(animationId);
         if(recognition) { try { recognition.stop(); } catch(e) {} }
         if(audioContext) { try { audioContext.close(); } catch(e) {} }
-        clearTimeout(window.silenceTimer);
-        clearTimeout(backupBtnTimer);
-        stopAllStreams();
-    }
-
-    function cancelIntercom() { stopLogic(); setUI(1); }
-
-    function finalizeIntercom() {
-        stopLogic();
-        currentPage = 1;
-        renderOpList();
-        setUI(3);
-    }
-
-    function changePage(pg) {
-        currentPage = pg;
-        renderOpList();
-    }
-
-    function stopAllStreams() {
         if(localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
         if(tvWindow) tvWindow.postMessage({type: 'STOP_VIDEO'}, '*');
     }
 
+    function cancelIntercom() { stopLogic(); setUI(1); }
+    function finalizeIntercom() { stopLogic(); renderOpList(); setUI(3); }
+    function changePage(pg) { currentPage = pg; renderOpList(); }
+
     function renderOpList() {
         const container = document.getElementById('op-list-container');
         container.innerHTML = '';
-        
-        // Split teachers into batches of 20
-        const itemsPerPage = 20;
-        const start = (currentPage - 1) * itemsPerPage;
-        const end = start + itemsPerPage;
-        const pageTeachers = teachers.slice(start, end);
-
-        // Highlight active page button
+        const start = (currentPage - 1) * 20;
+        const pageTeachers = teachers.slice(start, start + 20);
         document.getElementById('pg1Btn').classList.toggle('active-page', currentPage === 1);
         document.getElementById('pg2Btn').classList.toggle('active-page', currentPage === 2);
-
         pageTeachers.forEach(name => {
             const b = document.createElement('div');
-            b.className = 'op-btn';
-            b.innerText = name;
+            b.className = 'op-btn'; b.innerText = name;
             b.onclick = () => {
                 document.getElementById('sndChime').play();
                 if(tvWindow) tvWindow.postMessage({type: 'SHOW_NAME', name: name}, '*');
@@ -255,16 +183,15 @@
                 <div id="main" style="text-align:center; width:100%;"><h1 id="msg" style="font-size:8vw;">WELCOME</h1></div>
                 <video id="v" style="display:none; width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; transform: scaleX(-1);" autoplay playsinline></video>
                 <script>
-                    let tvStream;
                     window.onmessage = (e) => {
                         const m = document.getElementById('msg'); const v = document.getElementById('v'); const main = document.getElementById('main');
+                        if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
                         if(e.data.type === 'SYNC_STATE' && e.data.state === 1) { main.style.display = 'block'; v.style.display = 'none'; main.innerHTML = '<h1 style="font-size:8vw;">WELCOME</h1>'; }
-                        if(e.data.type === 'RESET_TV') { main.style.display = 'block'; v.style.display = 'none'; main.innerHTML = '<h1 style="font-size:8vw;">WELCOME</h1>'; }
-                        if(e.data.type === 'START_VIDEO') { main.style.display = 'none'; v.style.display = 'block'; navigator.mediaDevices.getUserMedia({video:true, audio:true}).then(s => { tvStream = s; v.srcObject = s; }); }
-                        if(e.data.type === 'STOP_VIDEO') { if(tvStream) tvStream.getTracks().forEach(t => t.stop()); v.style.display = 'none'; }
+                        if(e.data.type === 'START_VIDEO') { main.style.display = 'none'; v.style.display = 'block'; navigator.mediaDevices.getUserMedia({video:true, audio:true}).then(s => { v.srcObject = s; }); }
+                        if(e.data.type === 'STOP_VIDEO') { v.style.display = 'none'; }
                         if(e.data.type === 'SHOW_NAME') {
                             v.style.display = 'none'; main.style.display = 'block';
-                            main.innerHTML = '<div style="border:15px solid #ccff00; border-radius:50px; padding:40px;"><h1 style="font-size:10vw; color:#ccff00; margin:0;">' + e.data.name + '</h1></div>';
+                            main.innerHTML = '<div style="border:20px solid #ccff00; border-radius:50px; padding:60px;"><h1 style="font-size:12vw; color:#ccff00; margin:0; font-weight:900;">' + e.data.name + '</h1></div>';
                             setTimeout(() => { main.innerHTML = '<h1 style="font-size:8vw;">WELCOME</h1>'; }, 30000);
                         }
                     }
@@ -273,17 +200,11 @@
         `);
     }
 
-    function addTeacher() {
-        const n = document.getElementById('nameInput').value;
-        if(n) { teachers.push(n); teachers.sort(); localStorage.setItem('teachers', JSON.stringify(teachers)); renderAdmin(); document.getElementById('nameInput').value=''; }
-    }
+    function addTeacher() { const n = document.getElementById('nameInput').value; if(n) { teachers.push(n); teachers.sort(); localStorage.setItem('teachers', JSON.stringify(teachers)); renderAdmin(); document.getElementById('nameInput').value=''; } }
     function deleteTeacher(name) { teachers = teachers.filter(t => t !== name); localStorage.setItem('teachers', JSON.stringify(teachers)); renderAdmin(); }
     function renderAdmin() {
-        const grid = document.getElementById('button-grid');
-        grid.innerHTML = '';
-        teachers.forEach(t => {
-            grid.innerHTML += '<div style="background:#fff; padding:10px; border:1px solid #000; display:flex; justify-content:space-between; margin:2px;"><span>'+t+'</span> <button onclick="deleteTeacher(\''+t+'\')" class="delete-btn">X</button></div>';
-        });
+        const grid = document.getElementById('button-grid'); grid.innerHTML = '';
+        teachers.forEach(t => { grid.innerHTML += '<div style="background:#fff; padding:5px; border:1px solid #000; display:flex; justify-content:space-between; margin:2px; font-size:0.8rem;"><span>'+t+'</span> <button onclick="deleteTeacher(\''+t+'\')" style="background:red; color:white; border:none;">X</button></div>'; });
     }
     renderAdmin();
 </script>
