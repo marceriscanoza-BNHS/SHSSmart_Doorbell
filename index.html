@@ -3,11 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Smart Intercom v16 - High Contrast</title>
+    <title>Smart Intercom v18 - Giant Text</title>
     <style>
         :root {
-            --bg-admin: #f8f9fa;
-            /* HIGH CONTRAST SCHEME */
             --bg-main: #FFFFFF; 
             --text-main: #000000;
             --accent: #ccff00;
@@ -16,12 +14,11 @@
             --proceed: #0055ff;
         }
 
-        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg-admin); touch-action: manipulation; overflow: hidden; }
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #f8f9fa; touch-action: manipulation; overflow: hidden; }
         
         .admin-header { padding: 15px; background: #fff; border-bottom: 2px solid #ddd; }
         #button-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; padding: 20px; }
         
-        /* UPDATED: High Contrast Container */
         .state-container { 
             display: none; height: 100vh; width: 100vw; 
             flex-direction: column; align-items: center; justify-content: center; 
@@ -30,37 +27,41 @@
         }
         .active { display: flex !important; }
 
-        .bell-btn { font-size: 180px; cursor: pointer; background: none; border: none; animation: pulse 1s infinite; filter: drop-shadow(0 0 10px rgba(0,0,0,0.2)); }
+        .bell-btn { font-size: 200px; cursor: pointer; background: none; border: none; animation: pulse 1s infinite; }
         @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
 
-        /* SCRIPT BOX: Black text on white with thick border */
+        /* UPDATED: GIANT SCRIPT TEXT */
         .script-box { 
-            background: #fff; padding: 40px; border-radius: 20px; 
-            border: 8px solid #000; /* Extra thick for visibility */
-            width: 85%; font-size: 32px; text-align: center; color: #000; line-height: 1.4;
-            box-shadow: 10px 10px 0px #ccff00;
+            background: #fff; padding: 50px; border-radius: 30px; 
+            border: 10px solid #000; 
+            width: 90%; 
+            font-size: 48px; /* Increased from 32px */
+            font-weight: 700;
+            text-align: center; color: #000; line-height: 1.3;
+            box-shadow: 15px 15px 0px #ccff00;
+            box-sizing: border-box;
         }
         .script-box b { color: #0055ff; text-decoration: underline; }
 
-        .meter-container { width: 70%; height: 30px; background: #eee; border-radius: 15px; margin-top: 30px; overflow: hidden; border: 3px solid #000; }
+        /* LARGER VOLUME METER */
+        .meter-container { width: 80%; height: 50px; background: #eee; border-radius: 25px; margin-top: 40px; overflow: hidden; border: 5px solid #000; }
         #volumeBar { width: 0%; height: 100%; background: #00cc00; transition: width 0.1s; }
 
         #proceedBtn {
-            display: none; background: var(--proceed); color: white; border: 4px solid #000; padding: 25px 70px;
-            font-size: 2rem; font-weight: bold; border-radius: 20px; cursor: pointer;
-            margin-top: 25px;
+            display: none; background: var(--proceed); color: white; border: 5px solid #000; padding: 30px 80px;
+            font-size: 2.5rem; font-weight: bold; border-radius: 25px; cursor: pointer;
+            margin-top: 30px;
         }
 
-        /* OP LIST: Black buttons on white background */
-        .op-list { width: 100%; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; padding: 40px; box-sizing: border-box; flex-grow: 1; overflow-y: auto; }
+        .op-list { width: 100%; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; padding: 40px; box-sizing: border-box; flex-grow: 1; overflow-y: auto; }
         .op-btn { 
-            background: var(--btn-op); color: var(--accent); border: 4px solid #000; padding: 35px; 
-            font-size: 2.2rem; font-weight: bold; border-radius: 20px; cursor: pointer; text-align: center;
+            background: var(--btn-op); color: var(--accent); border: 5px solid #000; padding: 40px; 
+            font-size: 2.5rem; font-weight: bold; border-radius: 25px; cursor: pointer; text-align: center;
         }
 
         .manual-reset { 
-            background: var(--danger); color: white; border: 3px solid #000; padding: 15px 40px; 
-            font-size: 1.4rem; font-weight: bold; border-radius: 10px; cursor: pointer; 
+            background: var(--danger); color: white; border: 4px solid #000; padding: 20px 50px; 
+            font-size: 1.6rem; font-weight: bold; border-radius: 15px; cursor: pointer; 
             margin-top: auto; margin-bottom: 20px;
         }
 
@@ -79,23 +80,23 @@
 
     <div id="state-1" class="state-container">
         <button class="bell-btn" onclick="triggerDoorbell()">🔔</button>
-        <h1 style="color:#000; font-size: 4rem; margin-top:20px;">TAP TO START</h1>
+        <h1 style="color:#000; font-size: 5rem; margin-top:20px; font-weight: 900;">TAP TO START</h1>
     </div>
 
     <div id="state-2" class="state-container">
         <div class="script-box">
             "Good morning/afternoon po!<br>
-            I'm <b>(state your name)</b>, from <b>(state your grade and section)</b>.<br><br>
+            I'm <b>(your name)</b>, from <b>(grade & section)</b>.<br><br>
             <b>(State your purpose)</b>"
         </div>
         <div class="meter-container"><div id="volumeBar"></div></div>
         <button id="proceedBtn" onclick="finalizeIntercom()">DONE TALKING →</button>
-        <p id="micStatus" style="color:#000; margin-top:15px; font-weight:bold; font-size: 1.5rem;">LISTENING...</p>
+        <p id="micStatus" style="color:#000; margin-top:20px; font-weight:900; font-size: 2rem;">SPEAK LOUDLY</p>
         <button class="manual-reset" onclick="cancelIntercom()">RESET SYSTEM</button>
     </div>
 
     <div id="state-3" class="state-container">
-        <h2 style="color:#000; font-size: 3rem; margin-top: 40px;">Who are you looking for?</h2>
+        <h2 style="color:#000; font-size: 4rem; margin-top: 40px; font-weight: 900;">Choose Teacher:</h2>
         <div id="op-list-container" class="op-list"></div>
         <button class="manual-reset" onclick="cancelIntercom()">RESET SYSTEM</button>
     </div>
@@ -110,7 +111,7 @@
     let localStream;
     let audioContext, analyser, dataArray, animationId;
     let hasStartedTalking = false;
-    let idleTimeout, bypassTimeout, state3IdleTimer;
+    let bypassTimeout, state3IdleTimer;
 
     function setUI(state) {
         document.querySelectorAll('.state-container').forEach(c => c.classList.remove('active'));
@@ -119,7 +120,7 @@
         
         clearTimeout(state3IdleTimer);
         if(state === 3) {
-            state3IdleTimer = setTimeout(() => { cancelIntercom(); }, 60000); // 60s Idle Reset
+            state3IdleTimer = setTimeout(() => { cancelIntercom(); }, 60000); 
         }
     }
 
@@ -142,17 +143,28 @@
         clearTimeout(bypassTimeout);
         bypassTimeout = setTimeout(() => {
             document.getElementById('proceedBtn').style.display = 'block';
-        }, 15000); // 15s Bypass Rule
+        }, 15000);
 
         try {
-            localStream = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
+            const constraints = {
+                video: true,
+                audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true }
+            };
+
+            localStream = await navigator.mediaDevices.getUserMedia(constraints);
             if(tvWindow) tvWindow.postMessage({type: 'START_VIDEO'}, '*');
 
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
             const source = audioContext.createMediaStreamSource(localStream);
+            const enhancer = audioContext.createGain();
+            enhancer.gain.value = 2.5; // Audio Boost
+
             analyser = audioContext.createAnalyser();
             analyser.fftSize = 256;
-            source.connect(analyser);
+
+            source.connect(enhancer);
+            enhancer.connect(analyser);
+
             dataArray = new Uint8Array(analyser.frequencyBinCount);
             drawVolume();
 
@@ -163,7 +175,7 @@
                 recognition.onresult = () => {
                     hasStartedTalking = true;
                     clearTimeout(window.silenceTimer);
-                    window.silenceTimer = setTimeout(() => { finalizeIntercom(); }, 1200); 
+                    window.silenceTimer = setTimeout(() => { finalizeIntercom(); }, 3000); 
                 };
                 recognition.start();
             }
@@ -176,7 +188,7 @@
         let values = 0;
         for (let i = 0; i < dataArray.length; i++) { values += dataArray[i]; }
         let average = values / dataArray.length;
-        document.getElementById('volumeBar').style.width = Math.min(average * 2, 100) + "%";
+        document.getElementById('volumeBar').style.width = Math.min(average * 2.5, 100) + "%";
     }
 
     function cancelIntercom() {
