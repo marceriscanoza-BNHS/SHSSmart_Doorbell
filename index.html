@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Smart Intercom v14 - Manual Proceed</title>
+    <title>Smart Intercom v15 - Smart Bypass</title>
     <style>
         :root {
             --bg-admin: #f8f9fa;
@@ -16,18 +16,15 @@
 
         body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg-admin); touch-action: manipulation; overflow: hidden; }
         
-        /* ADMIN UI */
         .admin-header { padding: 15px; background: #fff; border-bottom: 2px solid #ddd; }
         #button-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; padding: 20px; }
         
         .state-container { display: none; height: 100vh; width: 100vw; flex-direction: column; align-items: center; justify-content: center; background: #000; color: #fff; position: fixed; top: 0; left: 0; z-index: 2000; }
         .active { display: flex !important; }
 
-        /* STATE 1: IDLE */
         .bell-btn { font-size: 180px; cursor: pointer; background: none; border: none; animation: pulse 1s infinite; }
         @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
 
-        /* STATE 2: INTERCOM */
         .script-box { 
             background: #111; padding: 40px; border-radius: 20px; border: 3px solid #333; 
             width: 80%; font-size: 28px; text-align: center; color: white; line-height: 1.4;
@@ -37,14 +34,13 @@
         .meter-container { width: 60%; height: 20px; background: #222; border-radius: 10px; margin-top: 30px; overflow: hidden; border: 1px solid #444; }
         #volumeBar { width: 0%; height: 100%; background: linear-gradient(90deg, #28a745, #ccff00, #ff4444); transition: width 0.1s; }
 
-        /* PROCEED BUTTON */
-        .proceed-btn {
-            background: var(--proceed); color: white; border: none; padding: 20px 60px;
+        /* BYPASS BUTTON - HIDDEN BY DEFAULT */
+        #proceedBtn {
+            display: none; background: var(--proceed); color: white; border: none; padding: 20px 60px;
             font-size: 1.8rem; font-weight: bold; border-radius: 15px; cursor: pointer;
             margin-top: 25px; box-shadow: 0 0 20px rgba(0, 123, 255, 0.5);
         }
 
-        /* STATE 3: LIST */
         .op-list { width: 100%; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; padding: 40px; box-sizing: border-box; flex-grow: 1; overflow-y: auto; }
         .op-btn { 
             background: #1a1a1a; color: #fff; border: 2px solid var(--text-fs); padding: 30px; 
@@ -68,13 +64,12 @@
         <button onclick="addTeacher()" style="background:green; color:#fff; padding:10px;">ADD</button>
         <button onclick="openTV()" style="background:blue; color:#fff; padding:10px;">1. OPEN TV</button>
         <button onclick="startOperator()" style="background:black; color:#fff; padding:10px;">2. START SYSTEM</button>
-        <hr>
         <div id="button-grid"></div>
     </div>
 
     <div id="state-1" class="state-container">
         <button class="bell-btn" onclick="triggerDoorbell()">🔔</button>
-        <h1 style="color:var(--text-fs); margin-top:20px;">CLICK TO START</h1>
+        <h1 style="color:var(--text-fs); margin-top:20px;">TAP TO START</h1>
     </div>
 
     <div id="state-2" class="state-container">
@@ -83,18 +78,17 @@
             I'm <b>(state your name)</b>, from <b>(state your grade and section)</b>.<br><br>
             <b>(State your purpose)</b>"
         </div>
-        
         <div class="meter-container"><div id="volumeBar"></div></div>
         
-        <button class="proceed-btn" onclick="finalizeIntercom()">DONE TALKING →</button>
+        <button id="proceedBtn" onclick="finalizeIntercom()">DONE TALKING →</button>
         
-        <p id="micStatus" style="color:var(--text-fs); margin-top:15px; font-weight:bold;">AUTO-DETECTING SPEECH...</p>
-
+        <p id="micStatus" style="color:var(--text-fs); margin-top:15px; font-weight:bold;">LISTENING...</p>
         <button class="manual-reset" onclick="cancelIntercom()">RESET SYSTEM</button>
     </div>
 
     <div id="state-3" class="state-container">
         <h2 style="color:var(--text-fs); margin-top: 40px;">Who are you looking for?</h2>
+        <p style="color:#888;">System will reset in 60s if no name is picked.</p>
         <div id="op-list-container" class="op-list"></div>
         <button class="manual-reset" onclick="cancelIntercom()">RESET SYSTEM</button>
     </div>
@@ -109,12 +103,18 @@
     let localStream;
     let audioContext, analyser, dataArray, animationId;
     let hasStartedTalking = false;
-    let idleTimeout;
+    let idleTimeout, bypassTimeout, state3IdleTimer;
 
     function setUI(state) {
         document.querySelectorAll('.state-container').forEach(c => c.classList.remove('active'));
         if(state > 0) document.getElementById(`state-${state}`).classList.add('active');
         if(tvWindow) tvWindow.postMessage({type: 'SYNC_STATE', state: state}, '*');
+        
+        // Handle State 3 Auto-Reset
+        clearTimeout(state3IdleTimer);
+        if(state === 3) {
+            state3IdleTimer = setTimeout(() => { cancelIntercom(); }, 60000);
+        }
     }
 
     function startOperator() {
@@ -131,9 +131,14 @@
 
     async function startVoiceAndCam() {
         hasStartedTalking = false;
-        document.getElementById('volumeBar').style.width = "0%";
-        clearTimeout(idleTimeout);
-        idleTimeout = setTimeout(() => { if (!hasStartedTalking) cancelIntercom(); }, 15000);
+        document.getElementById('proceedBtn').style.display = 'none';
+        
+        // Show Bypass Button only after 15 seconds
+        clearTimeout(bypassTimeout);
+        bypassTimeout = setTimeout(() => {
+            document.getElementById('proceedBtn').style.display = 'block';
+            document.getElementById('micStatus').innerText = "CAN'T HEAR YOU? TAP DONE TALKING.";
+        }, 15000);
 
         try {
             localStream = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
@@ -152,14 +157,9 @@
                 recognition.continuous = true;
                 recognition.interimResults = true;
                 recognition.onresult = (event) => {
-                    if (!hasStartedTalking) {
-                        hasStartedTalking = true;
-                        clearTimeout(idleTimeout);
-                    }
+                    hasStartedTalking = true;
                     clearTimeout(window.silenceTimer);
-                    window.silenceTimer = setTimeout(() => { 
-                        if (hasStartedTalking) finalizeIntercom(); 
-                    }, 3000); // Faster auto-switch (1.2 seconds)
+                    window.silenceTimer = setTimeout(() => { finalizeIntercom(); }, 1200); 
                 };
                 recognition.start();
             }
@@ -179,8 +179,9 @@
         cancelAnimationFrame(animationId);
         if(recognition) { try{recognition.stop();}catch(e){} recognition.onend = null; }
         if(audioContext) audioContext.close();
-        clearTimeout(idleTimeout);
         clearTimeout(window.silenceTimer);
+        clearTimeout(bypassTimeout);
+        clearTimeout(state3IdleTimer);
         stopAllStreams();
         setUI(1);
     }
@@ -189,8 +190,8 @@
         cancelAnimationFrame(animationId);
         if(recognition) { try{recognition.stop();}catch(e){} recognition.onend = null; }
         if(audioContext) audioContext.close();
-        clearTimeout(idleTimeout);
         clearTimeout(window.silenceTimer);
+        clearTimeout(bypassTimeout);
         stopAllStreams();
         setUI(3);
         renderOpList();
@@ -211,7 +212,7 @@
             b.onclick = () => {
                 document.getElementById('sndChime').play();
                 if(tvWindow) tvWindow.postMessage({type: 'SHOW_NAME', name: name}, '*');
-                setUI(1);
+                cancelIntercom(); // Resets everything and goes to State 1
             };
             container.appendChild(b);
         });
@@ -232,11 +233,9 @@
                         const m = document.getElementById('msg');
                         const v = document.getElementById('v');
                         const main = document.getElementById('main');
-                        if(e.data.type === 'SYNC_STATE' && e.data.state === 1) { 
-                            if(!resetTimer) {
-                                main.style.display = 'block'; v.style.display = 'none'; 
-                                main.innerHTML = '<h1 style="font-size:8vw;">WELCOME</h1>';
-                            }
+                        if(e.data.type === 'SYNC_STATE' && e.data.state === 1 && !resetTimer) { 
+                            main.style.display = 'block'; v.style.display = 'none'; 
+                            main.innerHTML = '<h1 style="font-size:8vw;">WELCOME</h1>';
                         }
                         if(e.data.type === 'RESET_TV') {
                             clearTimeout(resetTimer); resetTimer = null;
@@ -282,6 +281,4 @@
     renderAdmin();
 </script>
 </body>
-
 </html>
-
