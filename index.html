@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Smart Intercom v37</title>
+    <title>Smart Intercom v38</title>
     <style>
         :root {
             --bg-main: #FFFFFF; --text-main: #000000; --accent: #ccff00;
@@ -12,8 +12,10 @@
         body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #000; touch-action: manipulation; overflow: hidden; }
         
         #adminPanel { padding: 10px; background: #fff; border-bottom: 2px solid #ddd; position: relative; z-index: 5000; }
-        #button-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 5px; padding: 10px; max-height: 150px; overflow-y: auto; }
-        
+        #button-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; padding: 10px; max-height: 200px; overflow-y: auto; }
+        .admin-item { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; border: 1px solid #ccc; padding: 5px; border-radius: 5px; background: #f9f9f9; }
+        .del-btn { color: red; cursor: pointer; font-weight: bold; padding: 0 5px; border: none; background: none; }
+
         .state-container { 
             display: none; height: 100vh; width: 100vw; 
             flex-direction: column; align-items: center; justify-content: center; 
@@ -55,10 +57,10 @@
 
     <div id="adminPanel">
         <div style="display:flex; gap:10px; align-items:center;">
-            <input type="text" id="nameInput" placeholder="Add Teacher...">
-            <button onclick="addTeacher()" style="background:green; color:#fff; padding:10px;">ADD</button>
-            <button onclick="openTV()" style="background:blue; color:#fff; padding:10px;">1. OPEN TV</button>
-            <button onclick="startOperator()" style="background:black; color:#fff; padding:10px;">2. START</button>
+            <input type="text" id="nameInput" placeholder="Add Teacher..." style="padding:10px; flex:1;">
+            <button onclick="addTeacher()" style="background:green; color:#fff; padding:10px; border:none; cursor:pointer;">ADD</button>
+            <button onclick="openTV()" style="background:blue; color:#fff; padding:10px; border:none; cursor:pointer;">1. OPEN TV</button>
+            <button onclick="startOperator()" style="background:black; color:#fff; padding:10px; border:none; cursor:pointer;">2. START</button>
         </div>
         <div id="button-grid"></div>
     </div>
@@ -91,17 +93,24 @@
 <script>
     let tvWindow = null;
     let teachers = JSON.parse(localStorage.getItem('teachers')) || [];
-    let recognition, localStream, audioContext, analyser, dataArray, animationId;
+    let localStream, audioContext, analyser, dataArray, animationId;
     let currentPage = 1;
 
+    // --- LOGIC FIX: Check previous state to prevent auto-reset ---
     function setUI(state) {
+        const prevState = document.querySelector('.state-container.active')?.id;
+        
         document.querySelectorAll('.state-container').forEach(c => c.classList.remove('active'));
         if(state > 0) document.getElementById(`state-${state}`).classList.add('active');
         
-        // Sync Basic State (1=Welcome, 2=Video)
         if(tvWindow) {
-            if(state === 1) tvWindow.postMessage({type: 'RESET'}, '*');
-            if(state === 2) tvWindow.postMessage({type: 'START_VIDEO'}, '*');
+            // Prevent RESET if we just came from selecting a teacher (State 3)
+            if(state === 1 && prevState !== 'state-3') {
+                tvWindow.postMessage({type: 'RESET'}, '*');
+            }
+            if(state === 2) {
+                tvWindow.postMessage({type: 'START_VIDEO'}, '*');
+            }
         }
         if(state === 1 || state === 3) stopLogic();
     }
@@ -117,7 +126,6 @@
                 <script>
                     let t;
                     window.onmessage = (e) => {
-                        const msg = document.getElementById('msg');
                         const v = document.getElementById('v');
                         const content = document.getElementById('content');
                         clearTimeout(t);
@@ -133,6 +141,7 @@
                         if(e.data.type === 'SHOW_NAME') {
                             v.style.display = 'none'; content.style.display = 'block';
                             content.innerHTML = '<div style="border:1.5vw solid #ccff00; border-radius:4vw; padding:4vw; display:inline-block; max-width:85vw;"><h1 style="font-size:8vw; color:#ccff00; margin:0; word-wrap:break-word;">' + e.data.name + '</h1></div>';
+                            // Returns to Welcome after 30 seconds
                             t = setTimeout(() => { content.innerHTML = '<h1 style="font-size:8vw;">WELCOME</h1>'; }, 30000);
                         }
                     };
@@ -193,16 +202,3 @@
                 setUI(1);
             };
             container.appendChild(b);
-        });
-    }
-
-    function startOperator() { document.getElementById('adminPanel').style.display='none'; setUI(1); }
-    function addTeacher() { const n = document.getElementById('nameInput').value; if(n){teachers.push(n); teachers.sort(); localStorage.setItem('teachers', JSON.stringify(teachers)); renderAdmin(); document.getElementById('nameInput').value='';}}
-    function renderAdmin() { 
-        const g = document.getElementById('button-grid'); g.innerHTML = '';
-        teachers.forEach(t => { g.innerHTML += '<div style="font-size:0.7rem; border:1px solid #ccc; padding:2px; margin:2px;">'+t+'</div>'; });
-    }
-    renderAdmin();
-</script>
-</body>
-</html>
