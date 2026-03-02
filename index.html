@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Smart Intercom v39 - Full Restore</title>
+    <title>Smart Intercom v39 - Fixed</title>
     <style>
         :root {
             --bg-main: #FFFFFF; --text-main: #000000; --accent: #ccff00;
@@ -57,9 +57,9 @@
     <div id="adminPanel">
         <div style="display:flex; gap:10px; align-items:center;">
             <input type="text" id="nameInput" placeholder="Add Teacher...">
-            <button onclick="addTeacher()" style="background:green; color:#fff; padding:10px;">ADD</button>
-            <button onclick="openTV()" style="background:blue; color:#fff; padding:10px;">1. OPEN TV</button>
-            <button onclick="startOperator()" style="background:black; color:#fff; padding:10px;">2. START SYSTEM</button>
+            <button onclick="addTeacher()" style="background:green; color:#fff; padding:10px; border:none; cursor:pointer;">ADD</button>
+            <button onclick="openTV()" style="background:blue; color:#fff; padding:10px; border:none; cursor:pointer;">1. OPEN TV</button>
+            <button onclick="startOperator()" style="background:black; color:#fff; padding:10px; border:none; cursor:pointer;">2. START SYSTEM</button>
         </div>
         <div id="button-grid"></div>
     </div>
@@ -116,13 +116,20 @@
     }
 
     function setUI(state) {
+        // Detect current active state before changing
+        const wasInState3 = document.getElementById('state-3').classList.contains('active');
+        
         document.querySelectorAll('.state-container').forEach(c => c.classList.remove('active'));
         if(state > 0) document.getElementById(`state-${state}`).classList.add('active');
         
-        // SYNC TV: State 1 resets to Welcome. State 2 starts Video. State 3 is "Sticky".
         if(tvWindow) {
-            if(state === 1) tvWindow.postMessage({type: 'RESET_TV'}, '*');
-            if(state === 2) tvWindow.postMessage({type: 'START_VIDEO'}, '*');
+            // FIX: Only RESET TV if we are NOT coming from State 3 (Name selection)
+            if(state === 1 && !wasInState3) {
+                tvWindow.postMessage({type: 'RESET_TV'}, '*');
+            }
+            if(state === 2) {
+                tvWindow.postMessage({type: 'START_VIDEO'}, '*');
+            }
         }
         
         clearTimeout(idleTimer);
@@ -194,7 +201,7 @@
             b.onclick = () => {
                 document.getElementById('sndChime').play();
                 if(tvWindow) tvWindow.postMessage({type: 'SHOW_NAME', name: name}, '*');
-                cancelIntercom();
+                setUI(1); // Moving to State 1 now respects the "wasInState3" check
             };
             container.appendChild(b);
         });
@@ -232,11 +239,33 @@
     }
 
     function startOperator() { document.getElementById('adminPanel').style.display = 'none'; setUI(1); }
-    function addTeacher() { const n = document.getElementById('nameInput').value; if(n) { teachers.push(n); teachers.sort(); localStorage.setItem('teachers', JSON.stringify(teachers)); renderAdmin(); document.getElementById('nameInput').value=''; } }
-    function deleteTeacher(name) { teachers = teachers.filter(t => t !== name); localStorage.setItem('teachers', JSON.stringify(teachers)); renderAdmin(); }
+    
+    function addTeacher() { 
+        const n = document.getElementById('nameInput').value.trim(); 
+        if(n) { 
+            teachers.push(n); 
+            teachers.sort(); 
+            localStorage.setItem('teachers', JSON.stringify(teachers)); 
+            renderAdmin(); 
+            document.getElementById('nameInput').value=''; 
+        } 
+    }
+
+    function deleteTeacher(index) { 
+        teachers.splice(index, 1);
+        localStorage.setItem('teachers', JSON.stringify(teachers)); 
+        renderAdmin(); 
+    }
+
     function renderAdmin() {
         const grid = document.getElementById('button-grid'); grid.innerHTML = '';
-        teachers.forEach(t => { grid.innerHTML += '<div style="background:#fff; padding:5px; border:1px solid #000; display:flex; justify-content:space-between; margin:2px; font-size:0.8rem;"><span>'+t+'</span> <button onclick="deleteTeacher(\''+t+'\')" style="background:red; color:white; border:none;">X</button></div>'; });
+        teachers.forEach((t, index) => { 
+            const row = document.createElement('div');
+            row.style = "background:#fff; padding:5px; border:1px solid #000; display:flex; justify-content:space-between; margin:2px; font-size:0.8rem;";
+            row.innerHTML = `<span>${t}</span> <button style="background:red; color:white; border:none; cursor:pointer; padding: 2px 8px;">X</button>`;
+            row.querySelector('button').onclick = () => deleteTeacher(index);
+            grid.appendChild(row);
+        });
     }
 
     document.addEventListener('touchstart', () => {
