@@ -3,12 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Smart Intercom v62</title>
+    <title>Smart Intercom v63 - Final Stable</title>
     <style>
         :root { --bg-main: #FFFFFF; --text-main: #000000; --accent: #ccff00; --btn-op: #1a1a1a; --danger: #ff0000; --proceed: #0055ff; }
         body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #000; touch-action: manipulation; overflow: hidden; }
         
-        /* PULSING BELL ANIMATION */
+        /* Cooldown Visual Feedback */
+        .cooldown-active { pointer-events: none !important; opacity: 0.7; }
+        #statusMsg { 
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); 
+            background: rgba(0,0,0,0.9); color: #ccff00; padding: 15px 40px; 
+            border-radius: 50px; display: none; z-index: 9999; font-weight: 900; 
+            border: 3px solid #ccff00; font-size: 1.5rem;
+        }
+
         @keyframes pulse-red {
             0% { transform: scale(1); filter: drop-shadow(0 0 5px red); }
             50% { transform: scale(1.1); filter: drop-shadow(0 0 25px red); }
@@ -26,20 +34,43 @@
 
         .script-box { background: #fff; padding: 30px; border-radius: 25px; border: 8px solid #000; width: 90%; font-size: 32px; font-weight: 700; text-align: center; color: #000; line-height: 1.2; box-shadow: 10px 10px 0px #ccff00; box-sizing: border-box; z-index: 4001; }
         #proceedBtn { display: none; background: var(--proceed); color: white; border: 6px solid #000; padding: 30px 70px; font-size: 2.2rem; font-weight: 900; border-radius: 25px; cursor: pointer; margin-top: 25px; z-index: 9999 !important; position: relative; }
+        
         .op-list { display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(5, 1fr); width: 95vw; height: 60vh; gap: 10px; padding: 5px; }
         .op-btn { display: flex; align-items: center; justify-content: center; background: var(--btn-op); color: var(--accent); border: 3px solid #000; font-size: 1.2rem; font-weight: bold; border-radius: 10px; cursor: pointer; text-align: center; }
+        
         .page-nav-btn { background: #ddd; color: #000; border: 4px solid #000; padding: 15px 40px; font-size: 1.8rem; font-weight: 900; border-radius: 15px; cursor: pointer; }
         .active-page { background: var(--accent) !important; }
         .meter-container { width: 80%; height: 35px; background: #eee; border-radius: 20px; margin-top: 15px; border: 5px solid #000; position: relative; }
         #volumeBar { width: 0%; height: 100%; background: #00cc00; transition: width 0.1s; }
         .manual-reset { background: var(--danger); color: white; border: 4px solid #000; padding: 12px 30px; font-size: 1.2rem; font-weight: bold; border-radius: 10px; cursor: pointer; margin-top: 15px; position: relative; z-index: 9999; }
+
+        #confirmOverlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); z-index: 10000; align-items: center; justify-content: center;
+        }
+        .confirm-box {
+            background: white; padding: 40px; border-radius: 30px; border: 10px solid #000;
+            text-align: center; max-width: 80%;
+        }
     </style>
 </head>
-<body>
+<body onmousemove="resetInactivityTimer()" onclick="resetInactivityTimer()" ontouchstart="resetInactivityTimer()">
+
+    <div id="statusMsg">PLEASE WAIT...</div>
+
+    <div id="confirmOverlay">
+        <div class="confirm-box">
+            <h1 style="font-size: 3rem; margin-bottom: 30px;">CALL <span id="confirmName" style="color:var(--proceed)">NAME</span>?</h1>
+            <div style="display: flex; gap: 20px; justify-content: center;">
+                <button onclick="executeCall()" style="background:var(--proceed); color:white; border:4px solid #000; padding:20px 40px; font-size:2rem; font-weight:900; border-radius:15px; cursor:pointer;">YES</button>
+                <button onclick="closeConfirm()" style="background:var(--danger); color:white; border:4px solid #000; padding:20px 40px; font-size:2rem; font-weight:900; border-radius:15px; cursor:pointer;">NO</button>
+            </div>
+        </div>
+    </div>
 
     <div id="adminPanel">
         <div style="display:flex; gap:10px; margin-bottom:10px;">
-            <input type="text" id="nameInput" placeholder="Add Teacher (e.g. Ma'am Connie)..." style="padding:10px; flex-grow:1;">
+            <input type="text" id="nameInput" placeholder="Add Teacher..." style="padding:10px; flex-grow:1;">
             <button onclick="addTeacher()" style="background:green; color:white; padding:10px 20px; border:none; cursor:pointer;">ADD</button>
             <button onclick="openTV()" style="background:blue; color:white; padding:10px; border:none; cursor:pointer;">1. OPEN TV</button>
             <button onclick="startOperator()" style="background:black; color:white; padding:10px; border:none; cursor:pointer;">2. START</button>
@@ -48,7 +79,7 @@
     </div>
 
     <div id="state-1" class="state-container">
-        <button class="pulse" style="font-size:150px; background:none; border:none; cursor:pointer;" onclick="triggerDoorbell()">🔔</button>
+        <button class="pulse" style="font-size:150px; background:none; border:none; cursor:pointer;" onclick="handleDoorbellClick()">🔔</button>
         <h1 style="font-size: 3.5rem; font-weight: 900;">TAP TO START</h1>
     </div>
 
@@ -77,9 +108,20 @@
     let teachers = JSON.parse(localStorage.getItem('teachers')) || [];
     let localStream, audioContext, analyser, dataArray, animationId;
     let tvResetTimer = null;
+    let inactivityTimer = null;
     let currentPage = 1;
+    let isCooldown = false;
+    let selectedName = ""; 
+    let currentState = 1;
+    let isLocked = false;
 
-    // --- Admin Functions ---
+    function resetInactivityTimer() {
+        if (inactivityTimer) clearTimeout(inactivityTimer);
+        if (currentState !== 1) {
+            inactivityTimer = setTimeout(() => { manualReset(); }, 60000);
+        }
+    }
+
     function addTeacher() {
         const n = document.getElementById('nameInput').value.trim();
         if(n) { teachers.push(n); teachers.sort(); saveTeachers(); document.getElementById('nameInput').value=''; }
@@ -99,21 +141,16 @@
         });
     }
 
-    // --- NEW CUSTOM SOUND LOGIC (2 Calls) ---
     function speakName(name) {
         const cleanName = name.toLowerCase().replace(/'/g, "").replace(/ /g, "_");
         const audio = new Audio("sounds/" + cleanName + ".mp3");
         let playCount = 0;
-
         const playTwice = () => {
             if (playCount < 2) {
                 audio.play().then(() => {
                     playCount++;
                     audio.onended = () => { if(playCount < 2) setTimeout(playTwice, 800); };
-                }).catch(() => {
-                    // Fallback to TTS if .mp3 is missing
-                    runTTSFallback(name);
-                });
+                }).catch(() => { runTTSFallback(name); });
             }
         };
         playTwice();
@@ -128,14 +165,52 @@
         }
     }
 
-    // --- Logic Functions ---
+    function startCooldown(duration = 3000, message = "CALLING...") {
+        isCooldown = true;
+        document.body.classList.add('cooldown-active');
+        const msgBox = document.getElementById('statusMsg');
+        msgBox.innerText = message;
+        msgBox.style.display = 'block';
+        setTimeout(() => {
+            isCooldown = false;
+            document.body.classList.remove('cooldown-active');
+            msgBox.style.display = 'none';
+        }, duration);
+    }
+
+    function openConfirm(name) {
+        selectedName = name;
+        document.getElementById('confirmName').innerText = name;
+        document.getElementById('confirmOverlay').style.display = 'flex';
+    }
+
+    function closeConfirm() { document.getElementById('confirmOverlay').style.display = 'none'; }
+
+    function executeCall() {
+        closeConfirm();
+        if (isCooldown) return;
+        startCooldown(3000, "SENDING COMMAND...");
+        document.getElementById('sndChime').play().catch(()=>{});
+        setTimeout(() => speakName(selectedName), 1000);
+        if(tvWindow) {
+            tvWindow.postMessage({type: 'SHOW_NAME', name: selectedName}, '*');
+            if(tvResetTimer) clearTimeout(tvResetTimer);
+            tvResetTimer = setTimeout(() => { tvWindow.postMessage({type: 'FORCE_WELCOME'}, '*'); }, 30000);
+        }
+        setUI(1);
+    }
+
     function setUI(state) {
+        currentState = state;
         document.querySelectorAll('.state-container').forEach(c => c.classList.remove('active'));
         const target = document.getElementById(`state-${state}`);
         if(target) target.classList.add('active');
         if(tvWindow && state === 2) tvWindow.postMessage({type: 'START_VIDEO'}, '*');
         if (state === 1 || state === 3) stopMedia();
+        resetInactivityTimer();
     }
+
+    function handleDoorbellClick() { if (isCooldown) return; triggerDoorbell(); }
 
     function triggerDoorbell() {
         document.getElementById('sndDoorbell').play().catch(() => {});
@@ -179,20 +254,10 @@
         const list = teachers.slice((currentPage - 1) * 20, currentPage * 20);
         document.getElementById('pg1Btn').classList.toggle('active-page', currentPage === 1);
         document.getElementById('pg2Btn').classList.toggle('active-page', currentPage === 2);
-        
         list.forEach(name => {
             const b = document.createElement('div');
             b.className = 'op-btn'; b.innerText = name;
-            b.onclick = () => {
-                document.getElementById('sndChime').play().catch(()=>{});
-                setTimeout(() => speakName(name), 1000);
-                if(tvWindow) {
-                    tvWindow.postMessage({type: 'SHOW_NAME', name: name}, '*');
-                    if(tvResetTimer) clearTimeout(tvResetTimer);
-                    tvResetTimer = setTimeout(() => { tvWindow.postMessage({type: 'FORCE_WELCOME'}, '*'); }, 30000);
-                }
-                setUI(1);
-            };
+            b.onclick = () => openConfirm(name);
             container.appendChild(b);
         });
     }
@@ -200,13 +265,16 @@
     function manualReset() {
         if(tvWindow) tvWindow.postMessage({type: 'FORCE_WELCOME'}, '*');
         if(tvResetTimer) clearTimeout(tvResetTimer);
+        closeConfirm();
         setUI(1);
     }
 
     function openTV() {
         tvWindow = window.open("", "TVDisplay", "width=1200,height=800");
+        const scriptEnd = "<\/script>";
         tvWindow.document.write(`
             <html><body style="background:#000; color:#fff; margin:0; overflow:hidden; display:flex; align-items:center; justify-content:center; height:100vh; font-family:sans-serif;">
+                <button onclick="document.documentElement.requestFullscreen()" style="position:fixed; top:10px; right:10px; background:#444; color:white; border:none; padding:10px; border-radius:5px; cursor:pointer; opacity:0.3; z-index:10001;">[ ] FULLSCREEN</button>
                 <div id="main" style="text-align:center; width:100%; display:flex; align-items:center; justify-content:center;">
                     <h1 id="msg" style="font-size:8vw;">WELCOME</h1>
                 </div>
@@ -227,15 +295,32 @@
                             main.innerHTML = '<div style="border:1.5vw solid #ccff00; border-radius:4vw; padding:4vw; display:inline-block; max-width:85vw;"><h1 style="font-size:9vw; color:#ccff00; margin:0; font-weight:900; text-align:center;">' + e.data.name + '</h1></div>';
                         }
                     }
-                <\/script>
+                ${scriptEnd}
             </body></html>
         `);
     }
 
     function startOperator() { 
         document.getElementById('adminPanel').style.display = 'none'; 
+        // 1. Enter Fullscreen on Main Screen
+        if (document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen().catch(e => console.log("Fullscreen blocked"));
+        }
+        isLocked = true;
         setUI(1); 
     }
+
+    // 2. Prevent exit from Fullscreen (re-prompts on exit)
+    document.addEventListener('fullscreenchange', () => {
+        if (!document.fullscreenElement && isLocked) {
+            alert("SYSTEM LOCK: Please click OK and tap the screen to restore kiosk mode.");
+            // Browser security requires a user gesture to re-enter, so we wait for next click
+            document.body.addEventListener('click', function reEnter() {
+                document.documentElement.requestFullscreen();
+                document.body.removeEventListener('click', reEnter);
+            }, {once: true});
+        }
+    });
 
     renderAdmin();
 </script>
