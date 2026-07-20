@@ -140,7 +140,8 @@
         <!-- Live Environment Error Message Indicator -->
         <div id="diagWarning" class="diagnostic-warn">
             ⚠️ Camera/Mic is BLOCKED or requires HTTPS!<br>
-            Please host this on GitHub Pages (HTTPS) or localhost.
+            Please host this on GitHub Pages (HTTPS) or localhost.<br>
+            <small>(Note: TV View stream syncing strictly requires HTTPS/localhost to share frames.)</small>
         </div>
         
         <!-- Push To Talk Tactile Controller -->
@@ -169,7 +170,7 @@
 <script>
     let tvWindow = null;
     let teachers = JSON.parse(localStorage.getItem('teachers')) || [];
-    let localStream = null;
+    window.localStream = null;
     let audioContext = null;
     let analyser = null;
     let dataArray = null;
@@ -326,16 +327,18 @@
             if(tvResetTimer) clearTimeout(tvResetTimer);
             tvResetTimer = setTimeout(() => { tvWindow.postMessage({type: 'FORCE_WELCOME'}, '*'); }, 30000);
         }
-        setUI(1);
+        // Pass true to keep the TV displaying the teacher name while the local station resets
+        setUI(1, true);
     }
 
-    function setUI(state) {
+    function setUI(state, keepTvDisplay = false) {
         currentState = state;
         document.querySelectorAll('.state-container').forEach(c => c.classList.remove('active'));
         const target = document.getElementById(`state-${state}`);
         if(target) target.classList.add('active');
-        if(tvWindow && state === 2) tvWindow.postMessage({type: 'START_VIDEO'}, '*');
-        if (state === 1 || state === 3) stopMedia();
+        
+        // Video stop trigger
+        if (state === 1 || state === 3) stopMedia(keepTvDisplay);
         resetInactivityTimer();
     }
 
@@ -356,23 +359,34 @@
         
         try {
             // Request user media for both camera and microphone
-            localStream = await navigator.mediaDevices.getUserMedia({
+            window.localStream = await navigator.mediaDevices.getUserMedia({
                 video: { width: 1280, height: 720 }, 
                 audio: true
             });
             
             // Set initial state of microphone to muted (disabled)
-            localStream.getAudioTracks().forEach(track => track.enabled = false);
+            window.localStream.getAudioTracks().forEach(track => track.enabled = false);
             isHoldingTalk = false;
 
-            // Setup the audio analyzer for physical visual wave feedbacks
+            // Secure Audio setup pipeline that avoids "Overload resolution failed"
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const source = audioContext.createMediaStreamSource(localStream);
-            analyser = audioContext.createAnalyser();
-            source.connect(analyser);
-            dataArray = new Uint8Array(analyser.frequencyBinCount);
             
+            // 1. Create fully valid AnalyserNode
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            
+            // 2. Create source stream node and safely connect
+            const source = audioContext.createMediaStreamSource(window.localStream);
+            source.connect(analyser);
+            
+            // 3. Prepare data buffer and begin drawing volume ticks
+            dataArray = new Uint8Array(analyser.frequencyBinCount);
             drawVolume();
+
+            // Post signal to the TV View ONLY after the stream is fully active and assigned!
+            if (tvWindow) {
+                tvWindow.postMessage({type: 'START_VIDEO'}, '*');
+            }
         } catch (err) { 
             console.error("Camera/Mic capture error: ", err); 
             // Display error diagnostic message for non-secure origins or blocked access
@@ -381,10 +395,11 @@
     }
 
     function drawVolume() {
+        if (!analyser) return;
         animationId = requestAnimationFrame(drawVolume);
         
         // Disable wave meter response if Push to Talk is not held down
-        if (!isHoldingTalk || !analyser) {
+        if (!isHoldingTalk) {
             document.getElementById('volumeBar').style.width = "0%";
             return;
         }
@@ -395,25 +410,30 @@
         document.getElementById('volumeBar').style.width = Math.min(average * 3, 100) + "%";
     }
 
-    function stopMedia() {
+    function stopMedia(keepTvDisplay = false) {
         if(animationId) cancelAnimationFrame(animationId);
-        if(localStream) {
-            localStream.getTracks().forEach(track => track.stop());
+        if(window.localStream) {
+            window.localStream.getTracks().forEach(track => track.stop());
         }
-        localStream = null;
+        window.localStream = null;
         isHoldingTalk = false;
-        if(tvWindow) tvWindow.postMessage({type: 'STOP_VIDEO'}, '*');
+        analyser = null;
+        if(audioContext) {
+            audioContext.close().catch(() => {});
+            audioContext = null;
+        }
+        if(tvWindow && !keepTvDisplay) tvWindow.postMessage({type: 'STOP_VIDEO'}, '*');
     }
 
     const pttButton = document.getElementById('pttBtn');
 
     function pttStart(e) {
         if (e) e.preventDefault();
-        if (!localStream) return;
+        if (!window.localStream) return;
         
         isHoldingTalk = true;
         // Unmute the mic
-        localStream.getAudioTracks().forEach(track => track.enabled = true);
+        window.localStream.getAudioTracks().forEach(track => track.enabled = true);
         
         // Update button visual state
         pttButton.innerText = "🎙️ TALKING NOW...";
@@ -424,11 +444,11 @@
 
     function pttStop(e) {
         if (e) e.preventDefault();
-        if (!localStream) return;
+        if (!window.localStream) return;
         
         isHoldingTalk = false;
         // Mute the mic
-        localStream.getAudioTracks().forEach(track => track.enabled = false);
+        window.localStream.getAudioTracks().forEach(track => track.enabled = false);
         
         // Restore button visual state
         pttButton.innerText = "HOLD TO TALK 🎤";
@@ -445,6 +465,9 @@
     pttButton.addEventListener('mouseleave', pttStop);
     pttButton.addEventListener('touchend', pttStop, { passive: false });
     pttButton.addEventListener('touchcancel', pttStop, { passive: false });
+    
+    // Prevent zoom/context menus on iPads/tablets during press-and-hold
+    pttButton.addEventListener('contextmenu', e => e.preventDefault());
 
     function finalizeIntercom() { renderOpList(); setUI(3); }
     function changePage(pg) { currentPage = pg; renderOpList(); }
@@ -477,10 +500,62 @@
             <html>
             <head>
                 <title>TV Display View</title>
+                <style>
+                    body {
+                        background: #000;
+                        color: #fff;
+                        margin: 0;
+                        overflow: hidden;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        height: 100vh;
+                        font-family: 'Segoe UI', sans-serif;
+                        user-select: none;
+                    }
+                    #unlock-prompt {
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        background: #111;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        z-index: 99999;
+                        cursor: pointer;
+                    }
+                    .unlock-btn {
+                        background: #ccff00;
+                        color: #000;
+                        font-size: 3vw;
+                        font-weight: 900;
+                        border: none;
+                        padding: 20px 50px;
+                        border-radius: 20px;
+                        margin-top: 30px;
+                        cursor: pointer;
+                        box-shadow: 0 10px 0 #99cc00;
+                        transition: transform 0.1s;
+                    }
+                    .unlock-btn:active {
+                        transform: translateY(4px);
+                        box-shadow: 0 6px 0 #99cc00;
+                    }
+                </style>
             </head>
-            <body style="background:#000; color:#fff; margin:0; overflow:hidden; display:flex; align-items:center; justify-content:center; height:100vh; font-family:sans-serif;">
+            <body>
                 <button onclick="document.documentElement.requestFullscreen()" style="position:fixed; top:10px; right:10px; background:#444; color:white; border:none; padding:10px; border-radius:5px; cursor:pointer; opacity:0.3; z-index:10001;">[ ] FULLSCREEN</button>
                 
+                <!-- Explicit User Interaction unlock prompt to obey secure browser audio policies -->
+                <div id="unlock-prompt">
+                    <h1 style="font-size:4vw; color:#ccff00; margin:0; font-weight:900; text-align:center;">TV DISPLAY CONNECTED</h1>
+                    <p style="font-size:1.8vw; color:#fff; text-align:center; max-width:80%; margin: 15px 0 0 0;">TAP OR CLICK ANYWHERE ON THIS WINDOW TO ACTIVATE CAMERA & SOUND</p>
+                    <button class="unlock-btn">ACTIVATE DISPLAY</button>
+                </div>
+
                 <div id="main" style="text-align:center; width:100%; display:flex; align-items:center; justify-content:center;">
                     <h1 id="msg" style="font-size:8vw;">WELCOME</h1>
                 </div>
@@ -489,6 +564,17 @@
                 <video id="v" style="display:none; width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; transform: scaleX(-1);" autoplay playsinline></video>
                 
                 <script>
+                    // Unlock browser media session on click
+                    document.body.addEventListener('click', () => {
+                        const overlay = document.getElementById('unlock-prompt');
+                        if (overlay) overlay.style.display = 'none';
+                        
+                        const v = document.getElementById('v');
+                        if (v && v.srcObject) {
+                            v.play().catch(e => console.log("Unmute play activation failed:", e));
+                        }
+                    });
+
                     window.onmessage = (e) => {
                         const m = document.getElementById('msg'); 
                         const v = document.getElementById('v'); 
@@ -505,33 +591,29 @@
                             main.style.display = 'none'; 
                             v.style.display = 'block'; 
                             
-                            // Wire the opener's stream to play on the TV screen
+                            // Wire the opener's stream directly to play on the TV screen
                             try {
                                 if (window.opener && window.opener.localStream) {
                                     v.srcObject = window.opener.localStream;
                                     v.play().catch(err => {
-                                        // Interaction prompt to unlock audio if browser security delays playback
-                                        const overlay = document.createElement('div');
-                                        overlay.id = 'audio-unlocker';
-                                        overlay.style = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); display:flex; align-items:center; justify-content:center; z-index:99999; cursor:pointer;';
-                                        overlay.innerHTML = '<h2 style="font-size:4vw; color:#ccff00; text-align:center; padding: 20px;">TAP TO UNLOCK TV FEED AUDIO</h2>';
-                                        overlay.onclick = () => {
-                                            v.play();
-                                            overlay.remove();
-                                        };
-                                        document.body.appendChild(overlay);
+                                        console.log("Autoplay caught/blocked. Awaiting user click interaction to play audio.", err);
                                     });
+                                } else {
+                                    main.style.display = 'flex';
+                                    main.innerHTML = '<h2 style="font-size:3vw;color:#ff3b30;padding:20px;">No active visitor stream detected on main kiosk.</h2>';
                                 }
                             } catch(err) {
                                 console.error("Error referencing parent stream:", err);
                                 main.style.display = 'flex';
-                                main.innerHTML = '<h2 style="font-size:3vw;color:red;padding:20px;">Stream sharing blocked. Please run from HTTPS.</h2>';
+                                main.innerHTML = '<h2 style="font-size:3vw;color:#ff3b30;padding:20px;">Stream sharing blocked. Please run from HTTPS or localhost.</h2>';
                             }
                         }
                         
                         if(e.data.type === 'STOP_VIDEO') { 
                             v.srcObject = null; 
                             v.style.display = 'none'; 
+                            main.style.display = 'flex'; 
+                            main.innerHTML = '<h1 style="font-size:8vw;">WELCOME</h1>';
                         }
                         
                         if(e.data.type === 'SHOW_NAME') {
@@ -543,6 +625,14 @@
                 ${scriptEnd}
             </body></html>
         `);
+        
+        // Auto start TV display if stream is already loaded and active on main screen
+        if (window.localStream && tvWindow) {
+            setTimeout(() => {
+                tvWindow.postMessage({type: 'START_VIDEO'}, '*');
+            }, 800);
+        }
+        tvWindow.document.close();
     }
 
     function startOperator() { 
